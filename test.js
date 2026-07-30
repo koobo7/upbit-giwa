@@ -190,6 +190,19 @@ async function main() {
     'DelegationExpired', '만료일 지난 뒤 결제 시도'
   );
 
+  /* ── 12-1. 금고 자신을 수취인으로 지정하는 것은 막는다 ── */
+  console.log('\n12-1. 금고 자신을 수취인으로 지정하면 거절');
+  // receive()가 deposit()을 호출해 금고 명의로 credit되면 개인키가 없어 영구 회수 불가.
+  const expiry4 = (await chainNow()) + 7 * 86400;
+  await (await vault.createDelegation(A.agent, E('1'), E('3'), E('10'), expiry4, false, [])).wait();
+  const vaultAddr = await vault.getAddress();
+  await expectRevert(
+    asAgent.spend(A.owner, vaultAddr, E('0.5'), '금고 자신에게 송금'),
+    'SelfRecipient', '수취인 = 금고 주소인 결제 시도'
+  );
+  const [canC, reasonC] = await vault.canSpend(A.owner, A.agent, vaultAddr, E('0.5'));
+  ok(canC === false && reasonC === 'SELF_RECIPIENT', 'canSpend도 SELF_RECIPIENT 통보');
+
   /* ── 13. 위임자는 언제든 자금 회수 ── */
   console.log('\n13. 위임자의 출금 우선권');
   const balBefore = await vault.balanceOf(A.owner);

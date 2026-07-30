@@ -72,6 +72,7 @@ contract DelegationVault {
 
     error Reentrancy();
     error ZeroAddress();
+    error SelfRecipient();
     error ZeroAmount();
     error AmountTooLarge();
     error InvalidLimits();
@@ -213,6 +214,10 @@ contract DelegationVault {
         nonReentrant
     {
         if (recipient == address(0)) revert ZeroAddress();
+        // 금고 자신을 수취인으로 지정하면 receive()가 deposit()을 호출해
+        // 그 금액이 금고 명의로 credit된다. 금고 주소에는 개인키가 없어 영구 회수 불가다.
+        // 탈취는 아니지만 위임자 자금이 소각되므로 막는다.
+        if (recipient == address(this)) revert SelfRecipient();
         if (amount == 0) revert ZeroAmount();
         if (amount > type(uint128).max) revert AmountTooLarge();
 
@@ -298,6 +303,7 @@ contract DelegationVault {
         if (d.expiry == 0) return (false, "NO_DELEGATION");
         if (!d.active) return (false, "REVOKED");
         if (block.timestamp >= d.expiry) return (false, "EXPIRED");
+        if (recipient == address(this)) return (false, "SELF_RECIPIENT");
         if (amount == 0) return (false, "ZERO_AMOUNT");
         if (amount > type(uint128).max) return (false, "AMOUNT_TOO_LARGE");
         if (amount > d.perTxLimit) return (false, "PER_TX_LIMIT");
