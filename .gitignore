@@ -1,0 +1,8 @@
+node_modules/
+build/
+.env
+*.log
+
+# 배포 산출물: 루트 사본은 무시, web/ 사본은 Cloudflare Pages가 읽어야 하므로 커밋
+deployed.json
+!web/deployed.json

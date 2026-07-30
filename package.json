@@ -1,0 +1,19 @@
+{
+  "name": "ingam",
+  "version": "0.1.0",
+  "description": "INGAM — AI 에이전트를 위한 위임 결제 레이어 (GIWA Sepolia)",
+  "scripts": {
+    "build": "node compile.js",
+    "test": "node compile.js && node test.js",
+    "demo": "node compile.js && node script/demo.js",
+    "deploy": "node compile.js && node script/deploy.js",
+    "web": "node script/serve.js"
+  },
+  "keywords": ["giwa", "ai-agent", "delegation", "payments"],
+  "license": "MIT",
+  "dependencies": {
+    "ethers": "^6.13.0",
+    "ganache": "^7.9.2",
+    "solc": "0.8.26"
+  }
+}

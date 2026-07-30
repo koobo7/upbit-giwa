@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>INGAM — AI 에이전트 위임 결제 레이어</title>
+<style>
+  :root{
+    --bg:#0b0d10; --panel:#14181d; --line:#242b33; --text:#e8ecf1;
+    --dim:#8b96a5; --accent:#4ade80; --danger:#f87171; --warn:#fbbf24; --blue:#60a5fa;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Pretendard","Apple SD Gothic Neo",system-ui,sans-serif;
+    font-size:14px;line-height:1.6}
+  header{border-bottom:1px solid var(--line);padding:18px 24px;display:flex;
+    align-items:center;gap:14px;flex-wrap:wrap}
+  h1{font-size:17px;margin:0;letter-spacing:-.02em}
+  .sub{color:var(--dim);font-size:12px}
+  .spacer{flex:1}
+  .net{font-size:11px;color:var(--dim);border:1px solid var(--line);
+    border-radius:999px;padding:4px 10px}
+  main{max-width:1080px;margin:0 auto;padding:24px;display:grid;
+    grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:820px){main{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px}
+  .card h2{font-size:13px;margin:0 0 14px;color:var(--dim);font-weight:600;
+    text-transform:uppercase;letter-spacing:.06em}
+  label{display:block;font-size:12px;color:var(--dim);margin:10px 0 4px}
+  input,select{width:100%;background:#0b0e12;border:1px solid var(--line);
+    color:var(--text);border-radius:8px;padding:9px 11px;font-size:13px;font-family:inherit}
+  input:focus,select:focus{outline:none;border-color:var(--blue)}
+  button{background:var(--blue);color:#06121f;border:0;border-radius:8px;
+    padding:10px 16px;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit}
+  button.ghost{background:transparent;border:1px solid var(--line);color:var(--text);font-weight:500}
+  button.danger{background:var(--danger);color:#2a0808}
+  button:disabled{opacity:.4;cursor:not-allowed}
+  .row{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .meter{margin:12px 0}
+  .meter .top{display:flex;justify-content:space-between;font-size:12px;color:var(--dim)}
+  .bar{height:6px;background:#0b0e12;border-radius:999px;overflow:hidden;margin-top:5px}
+  .bar span{display:block;height:100%;background:var(--accent);transition:width .4s}
+  .bar.warn span{background:var(--warn)}
+  .bar.danger span{background:var(--danger)}
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  th{text-align:left;color:var(--dim);font-weight:500;padding:6px 4px;
+    border-bottom:1px solid var(--line)}
+  td{padding:8px 4px;border-bottom:1px solid #1b2027;vertical-align:top}
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px}
+  .ok{color:var(--accent)} .no{color:var(--danger)} .dim{color:var(--dim)}
+  .badge{display:inline-block;font-size:10px;padding:2px 7px;border-radius:999px;
+    border:1px solid currentColor}
+  .empty{color:var(--dim);font-size:12px;padding:18px 0;text-align:center}
+  .note{font-size:11px;color:var(--dim);margin-top:12px;line-height:1.7}
+  .full{grid-column:1/-1}
+  #log{max-height:260px;overflow:auto}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>INGAM <span class="dim" style="font-weight:400">인감</span></h1>
+    <div class="sub">AI 에이전트에게 권한은 주되, 한도는 체인이 강제한다</div>
+  </div>
+  <div class="spacer"></div>
+  <div class="net" id="net">지갑 미연결</div>
+  <button class="ghost" id="connect">지갑 연결</button>
+</header>
+
+<main>
+  <section class="card">
+    <h2>1. 위임장 발급</h2>
+    <label>에이전트 지갑 주소</label>
+    <input id="agent" class="mono" placeholder="0x..." />
+    <div class="grid2">
+      <div><label>건당 한도 (ETH)</label><input id="perTx" value="0.5" /></div>
+      <div><label>일일 한도 (ETH)</label><input id="daily" value="1" /></div>
+      <div><label>총 한도 (ETH)</label><input id="total" value="5" /></div>
+      <div><label>유효 기간 (일)</label><input id="days" value="30" /></div>
+    </div>
+    <label>허용 수취인 (쉼표로 구분, 비우면 제한 없음)</label>
+    <input id="recipients" class="mono" placeholder="0xshop..., 0xapi..." />
+    <div class="row">
+      <button id="btnCreate">위임장 발급</button>
+      <button class="ghost" id="btnDeposit">금고에 예치</button>
+    </div>
+    <div class="note">
+      여기서 정한 규칙은 앱이 아니라 스마트 컨트랙트에 새겨집니다.
+      에이전트가 탈취되거나 이 화면이 사라져도 한도는 그대로 강제됩니다.
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>2. 실시간 한도</h2>
+    <div id="status">
+      <div class="empty">위임을 발급하거나 에이전트 주소를 입력하세요.</div>
+    </div>
+    <div class="row">
+      <button class="ghost" id="btnRefresh">새로고침</button>
+      <button class="danger" id="btnRevoke">즉시 회수</button>
+    </div>
+    <div class="note">
+      회수는 트랜잭션 한 건입니다. 확정되는 순간부터 에이전트는 1원도 쓸 수 없습니다.
+    </div>
+  </section>
+
+  <section class="card full">
+    <h2>3. 온체인 감사 로그</h2>
+    <div id="log">
+      <div class="empty">아직 기록이 없습니다.</div>
+    </div>
+    <div class="note">
+      모든 결제는 <span class="mono">Spent</span> 이벤트로 체인에 남습니다.
+      누가·언제·어디에·얼마를 썼는지 사후에 부인할 수 없습니다.
+    </div>
+  </section>
+</main>
+
+<script type="module">
+import { ethers } from "https://esm.sh/ethers@6.13.2";
+
+const GIWA = {
+  chainId: 91342,
+  chainIdHex: "0x" + (91342).toString(16),
+  name: "GIWA Sepolia",
+  rpc: "https://sepolia-rpc.giwa.io",
+  explorer: "https://sepolia-explorer.giwa.io",
+};
+
+const ABI = [
+  "function deposit() payable",
+  "function withdraw(uint256 amount)",
+  "function balanceOf(address) view returns (uint256)",
+  "function createDelegation(address agent,uint128 perTxLimit,uint128 dailyLimit,uint128 totalCap,uint64 expiry,bool whitelistOnly,address[] recipients) returns (bytes32)",
+  "function revoke(address agent)",
+  "function remaining(address principal,address agent) view returns (uint256 today,uint256 total)",
+  "function getDelegation(address principal,address agent) view returns (tuple(uint128 perTxLimit,uint128 dailyLimit,uint128 totalCap,uint128 totalSpent,uint128 spentToday,uint64 dayIndex,uint64 expiry,bool active,bool whitelistOnly))",
+  "function canSpend(address principal,address agent,address recipient,uint256 amount) view returns (bool ok,string reason)",
+  "event Spent(bytes32 indexed id,address indexed agent,address indexed recipient,address principal,uint256 amount,string memo)",
+  "event DelegationRevoked(bytes32 indexed id,address indexed principal,address indexed agent,uint128 totalSpent)",
+];
+
+let provider, signer, me, vault, VAULT_ADDR;
+
+const $ = (id) => document.getElementById(id);
+const E = (v) => ethers.parseEther(String(v).trim() || "0");
+const F = (v) => Number(ethers.formatEther(v)).toLocaleString(undefined, { maximumFractionDigits: 4 });
+const short = (a) => a.slice(0, 8) + "…" + a.slice(-4);
+
+// 배포 주소 로드: ?vault= 쿼리 > deployed.json > 수동 입력
+async function loadAddress() {
+  const q = new URLSearchParams(location.search).get("vault");
+  if (q && ethers.isAddress(q)) return q;
+  for (const p of ["./deployed.json", "../deployed.json"]) {
+    try {
+      const r = await fetch(p, { cache: "no-store" });
+      if (r.ok) {
+        const j = await r.json();
+        if (ethers.isAddress(j.address)) return j.address;
+      }
+    } catch {}
+  }
+  return prompt("배포된 DelegationVault 주소를 입력하세요 (npm run deploy 결과)");
+}
+
+$("connect").onclick = async () => {
+  if (!window.ethereum) return alert("메타마스크가 필요합니다.");
+  provider = new ethers.BrowserProvider(window.ethereum);
+  await provider.send("eth_requestAccounts", []);
+
+  const net = await provider.getNetwork();
+  if (Number(net.chainId) !== GIWA.chainId) {
+    try {
+      await provider.send("wallet_switchEthereumChain", [{ chainId: GIWA.chainIdHex }]);
+    } catch {
+      await provider.send("wallet_addEthereumChain", [{
+        chainId: GIWA.chainIdHex, chainName: GIWA.name,
+        rpcUrls: [GIWA.rpc], blockExplorerUrls: [GIWA.explorer],
+        nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+      }]);
+    }
+    provider = new ethers.BrowserProvider(window.ethereum);
+  }
+
+  signer = await provider.getSigner();
+  me = await signer.getAddress();
+  VAULT_ADDR = VAULT_ADDR || await loadAddress();
+  vault = new ethers.Contract(VAULT_ADDR, ABI, signer);
+
+  $("net").textContent = `${GIWA.name} · ${short(me)}`;
+  refresh();
+  watch();
+};
+
+$("btnDeposit").onclick = async () => {
+  const amt = prompt("금고에 예치할 금액 (ETH)", "1");
+  if (!amt) return;
+  const tx = await vault.deposit({ value: E(amt) });
+  await tx.wait();
+  refresh();
+};
+
+$("btnCreate").onclick = async () => {
+  const agent = $("agent").value.trim();
+  if (!ethers.isAddress(agent)) return alert("에이전트 주소가 올바르지 않습니다.");
+  const recips = $("recipients").value.split(",").map(s => s.trim()).filter(Boolean);
+  const expiry = Math.floor(Date.now() / 1000) + Number($("days").value) * 86400;
+  const tx = await vault.createDelegation(
+    agent, E($("perTx").value), E($("daily").value), E($("total").value),
+    expiry, recips.length > 0, recips
+  );
+  await tx.wait();
+  refresh();
+};
+
+$("btnRevoke").onclick = async () => {
+  const agent = $("agent").value.trim();
+  if (!ethers.isAddress(agent)) return alert("에이전트 주소를 입력하세요.");
+  if (!confirm("이 에이전트의 모든 권한을 즉시 회수합니다. 계속할까요?")) return;
+  const tx = await vault.revoke(agent);
+  await tx.wait();
+  refresh();
+};
+
+$("btnRefresh").onclick = () => refresh();
+
+function meter(label, used, cap) {
+  const pct = cap === 0n ? 0 : Number((used * 1000n) / cap) / 10;
+  const cls = pct >= 90 ? "danger" : pct >= 60 ? "warn" : "";
+  return `<div class="meter">
+    <div class="top"><span>${label}</span><span>${F(used)} / ${F(cap)} ETH</span></div>
+    <div class="bar ${cls}"><span style="width:${Math.min(pct, 100)}%"></span></div>
+  </div>`;
+}
+
+async function refresh() {
+  if (!vault) return;
+  const agent = $("agent").value.trim();
+  const bal = await vault.balanceOf(me);
+
+  if (!ethers.isAddress(agent)) {
+    $("status").innerHTML = `<div class="empty">금고 잔액 ${F(bal)} ETH · 에이전트 주소를 입력하세요.</div>`;
+    return;
+  }
+
+  const d = await vault.getDelegation(me, agent);
+  if (d.expiry === 0n) {
+    $("status").innerHTML = `<div class="empty">이 에이전트에게 발급된 위임장이 없습니다.</div>`;
+    return;
+  }
+
+  const expired = BigInt(Math.floor(Date.now() / 1000)) >= d.expiry;
+  const state = !d.active
+    ? `<span class="badge no">회수됨</span>`
+    : expired ? `<span class="badge no">만료</span>`
+    : `<span class="badge ok">활성</span>`;
+
+  $("status").innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <span class="mono dim">${short(agent)}</span>${state}
+    </div>
+    <div class="dim" style="font-size:12px">금고 잔액 ${F(bal)} ETH ·
+      만료 ${new Date(Number(d.expiry) * 1000).toLocaleDateString("ko-KR")} ·
+      ${d.whitelistOnly ? "화이트리스트 전용" : "수취인 제한 없음"}</div>
+    ${meter("오늘 사용", d.spentToday, d.dailyLimit)}
+    ${meter("총 사용", d.totalSpent, d.totalCap)}
+    <div class="dim" style="font-size:12px">건당 한도 ${F(d.perTxLimit)} ETH</div>
+  `;
+  loadLog(agent);
+}
+
+async function loadLog(agent) {
+  const from = Math.max(0, (await provider.getBlockNumber()) - 9000);
+  const spent = await vault.queryFilter(vault.filters.Spent(null, agent), from);
+  if (spent.length === 0) {
+    $("log").innerHTML = `<div class="empty">아직 결제 기록이 없습니다.</div>`;
+    return;
+  }
+  const rows = spent.slice(-30).reverse().map(l => `
+    <tr>
+      <td class="mono dim">#${l.blockNumber}</td>
+      <td class="mono">${short(l.args.recipient)}</td>
+      <td>${F(l.args.amount)} ETH</td>
+      <td class="dim">${l.args.memo || "-"}</td>
+      <td class="mono"><a class="dim" target="_blank"
+        href="${GIWA.explorer}/tx/${l.transactionHash}">보기</a></td>
+    </tr>`).join("");
+  $("log").innerHTML = `<table>
+    <thead><tr><th>블록</th><th>수취인</th><th>금액</th><th>메모</th><th></th></tr></thead>
+    <tbody>${rows}</tbody></table>`;
+}
+
+function watch() {
+  vault.on(vault.filters.Spent(), () => refresh());
+  vault.on(vault.filters.DelegationRevoked(), () => refresh());
+}
+
+$("agent").addEventListener("change", () => refresh());
+</script>
+</body>
+</html>
