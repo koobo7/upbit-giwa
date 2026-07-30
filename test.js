@@ -88,9 +88,13 @@ async function main() {
 
   /* ── 3. 한도 내 결제 성공 ── */
   console.log('\n3. 한도 안에서는 에이전트가 자유롭게 결제');
-  const shopBefore = await provider.getBalance(A.shop);
-  await (await asAgent.spend(A.owner, A.shop, E('0.8'), '구독 결제 8월분')).wait();
-  ok((await provider.getBalance(A.shop)) - shopBefore === E('0.8'), '수취인이 0.8 수령');
+  // ethers BrowserProvider는 blockNumber를 캐시해서 'latest' 조회가 낡은 상태를 본다.
+  // 결제 전/후 블록을 명시적으로 지정해 실제 잔액 변화를 읽는다.
+  const blockBefore = await provider.getBlockNumber();
+  const shopBefore = await provider.getBalance(A.shop, blockBefore);
+  const spendRc = await (await asAgent.spend(A.owner, A.shop, E('0.8'), '구독 결제 8월분')).wait();
+  const shopAfter = await provider.getBalance(A.shop, spendRc.blockNumber);
+  ok(shopAfter - shopBefore === E('0.8'), '수취인이 0.8 수령');
   ok(await vault.balanceOf(A.owner) === E('99.2'), '위임자 잔액 99.2로 차감');
 
   const [rToday, rTotal] = await vault.remaining(A.owner, A.agent);
