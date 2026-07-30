@@ -56,7 +56,7 @@ INGAM은 네 가지가 동시에 필요해서 GIWA에서만 성립한다고 주�
 ```
 contracts/DelegationVault.sol   핵심 컨트랙트 (331줄, 외부 의존성 0)
 compile.js                      solc 컴파일 → build/DelegationVault.json
-test.js                         규칙 검증 스위트 (ganache 기반, 28개 단언)
+test.js                         규칙 검증 스위트 (ganache 기반, 26개 단언 — 전부 통과)
 script/deploy.js                GIWA Sepolia 배포 → deployed.json + web/deployed.json
 script/demo.js                  데모데이 4장면 시나리오 (영상용)
 script/serve.js                 web/ 정적 서버 (포트 5173)
@@ -90,20 +90,33 @@ PRIVATE_KEY=0x... npm run deploy    # GIWA Sepolia 배포
 **완료**
 
 - 컨트랙트, 테스트, 배포 스크립트, 데모 스크립트, 대시보드, 지원서 초안, 팀 문서
-- git 초기화 + 커밋 1개 (`main` 브랜치), remote `origin` = `https://github.com/koobo7/upbit-giwa.git`
+- **`npm install && npm test` 실제 통과 확인 — 통과 26 / 실패 0** (Node 24.13.0)
+- **`npm run demo` 4장면 정상 재생 확인** — 영상 녹화 가능 상태
+- git 커밋 3개, `origin/main`에 **푸시 완료**
 - 도메인 `upbit-giwa.metabox.pro` — DNS/프록시는 응답하나 **본문이 비어 있음** (배포 전)
 
 **미완료 — 다음 세션이 할 일**
 
-1. `git push -u origin main` — 아직 푸시 안 됨
-2. Cloudflare Pages 설정 확인
+1. Cloudflare Pages 설정 확인
    - Build command: 비움 / Output directory: `web` / Production branch: `main`
-3. `npm install && npm test` 실제 통과 확인 (아직 로컬에서 안 돌려봄)
-4. **`TEAM.md`의 대괄호 `[ ]` 채우기** — 이름, 경력, GitHub 아이디, 링크
-5. `APPLICATION_KO.md` 하단 체크리스트 항목 채우기
-6. 데모 영상 2분 녹화
-7. 신청서 제출 (21:00 목표)
-8. *(선택, 제출 후로 미룸)* 컨트랙트를 GIWA Sepolia에 배포하고 `web/deployed.json` 커밋
+2. **`TEAM.md`의 대괄호 `[ ]` 채우기** — 이름, 경력, GitHub 아이디, 링크 (사용자만 가능)
+3. `APPLICATION_KO.md` 하단 체크리스트 항목 채우기
+4. **`APPLICATION_KO.md` 7번 KPI 표의 "조정 필요" 채우기** — TVL 목표가 비어 있음
+5. 데모 영상 2분 녹화
+6. 신청서 제출 (21:00 목표)
+7. *(선택, 제출 후로 미룸)* 컨트랙트를 GIWA Sepolia에 배포하고 `web/deployed.json` 커밋
+
+## 첫 실행에서 드러났던 문제 (해결됨)
+
+두 건 모두 **컨트랙트가 아니라 툴체인·테스트 하네스 문제**였습니다. 재발 시 참고:
+
+1. **`canSpend()`가 invalid opcode로 죽음** — solc 0.8.26의 기본 EVM 타깃 `cancun`이
+   `string memory` 반환에 `MCOPY`(0x5e)를 emit하는데 ganache 7.x가 이를 구현하지 않음.
+   `compile.js`에 `evmVersion: 'shanghai'`를 고정해 해결. **이 설정을 지우지 마세요.**
+   GIWA는 OP Stack L2라 shanghai 타깃이 배포 경로에도 안전합니다.
+2. **수취인 잔액 단언 실패** — ethers `BrowserProvider`가 blockNumber를 캐시해
+   `getBalance(addr)`의 `latest`가 블록 0을 봄. 명시적 블록 번호를 넘겨 해결.
+   로컬 테스트에서 `provider.getBalance()`를 쓸 때 같은 함정이 재발할 수 있습니다.
 
 ## 작업 시 지켜야 할 것
 
@@ -115,10 +128,12 @@ PRIVATE_KEY=0x... npm run deploy    # GIWA Sepolia 배포
   과하게 부르면 나중에 못 받습니다.
 - `deployed.json`은 루트 사본은 gitignore, `web/` 사본은 커밋 (Pages가 읽어야 함).
 
-## 알려진 환경 제약
+## 알려진 환경 제약 (해소됨)
 
-이 프로젝트를 만든 Cowork 세션의 샌드박스는 npm 레지스트리와 github.com이 차단돼 있었습니다.
-그래서 **컴파일·테스트·푸시가 실제로 실행된 적이 없습니다.**
-JS 문법 검사(`node --check`)와 Solidity 코드 리뷰만 마친 상태입니다.
-Claude Code에서는 로컬 네트워크를 쓸 수 있으니 `npm test`를 가장 먼저 돌려서
-실제로 통과하는지 확인하세요. 여기서 실패가 나올 가능성이 있습니다.
+이 프로젝트를 만든 Cowork 세션의 샌드박스는 npm 레지스트리와 github.com이 차단돼 있어
+컴파일·테스트·푸시가 한 번도 실행된 적이 없었습니다.
+**2026-07-31 Claude Code 세션에서 전부 실행했고, 위 "첫 실행에서 드러났던 문제" 2건을
+고쳐 테스트 26개 전부 통과·푸시 완료했습니다.** 더 이상 이 제약은 없습니다.
+
+참고: ganache 7.x는 Node 24에서 µWS 네이티브 바이너리를 못 찾아
+`Falling back to a NodeJS implementation` 경고를 출력합니다. 동작에는 지장이 없습니다.
