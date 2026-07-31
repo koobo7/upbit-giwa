@@ -45,9 +45,53 @@
       "planTitle": "생활용품 정기 주문",
       "rail": "settled",
       "anomaly": null
+    },
+    {
+      "at": 1785472824969,
+      "merchant": "도메인 갱신",
+      "amount": "0.000000006567",
+      "status": "paid",
+      "txHash": "0x2f0210fac2c82be221f981e3f66b2b4c6b2f7907c41c186a286571f1bed1d645",
+      "planId": "T-2",
+      "planTitle": "개발 인프라 사용료 정산",
+      "rail": "onchain",
+      "anomaly": null
+    },
+    {
+      "at": 1785472874301,
+      "merchant": "OpenAI API 크레딧",
+      "amount": "0.00000000806",
+      "status": "paid",
+      "txHash": "0x5343ae4655ec39c5ff0c278ee1b77dad2841407d89d1efb58ecab17fe46e6808",
+      "planId": "T-2",
+      "planTitle": "개발 인프라 사용료 정산",
+      "rail": "onchain",
+      "anomaly": null
+    },
+    {
+      "at": 1785472923642,
+      "merchant": "GitHub Copilot",
+      "amount": "0.000000005606",
+      "status": "paid",
+      "txHash": "0x0db5c9af2a2e83d4955f13def0190dca5b264c0e6136938f3b688b33aca0fd65",
+      "planId": "T-1",
+      "planTitle": "구독 서비스 자동 갱신",
+      "rail": "settled",
+      "anomaly": null
+    },
+    {
+      "at": 1785472968729,
+      "merchant": "도메인 갱신 → 미등록 가맹점",
+      "amount": "0.000000007135",
+      "status": "blocked",
+      "reason": "MERCHANT_NOT_ALLOWED",
+      "planId": "T-2",
+      "planTitle": "개발 인프라 사용료 정산",
+      "rail": "onchain",
+      "anomaly": "merchant"
     }
   ],
-  "updatedAt": "2026-07-31T04:39:35.673Z",
+  "updatedAt": "2026-07-31T04:42:48.770Z",
   "agent": "0xa686210a6291Da6A535E47592c087118604C8A47",
   "principal": "0x538F0C6c18014D3C31af08f0e25D8404D893A66F",
   "intervalSec": 45,
@@ -79,6 +123,6 @@
       ]
     }
   ],
-  "remainingToday": "0.000019980302",
-  "remainingTotal": "0.000199980302"
+  "remainingToday": "0.000019960069",
+  "remainingTotal": "0.000199960069"
 }
