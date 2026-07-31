@@ -13,6 +13,7 @@
  *
  * 키는 stdin으로만 받고 어디에도 저장하지 않는다.
  */
+require('./env');   // .env 로드 (있으면)
 const { ethers } = require('ethers');
 const fs = require('fs');
 const path = require('path');

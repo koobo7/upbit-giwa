@@ -6,6 +6,7 @@
  * 컨트랙트를 새로 배포하면 이전 기록과 위임이 따라오지 않는다.
  * 활동 기록을 비우고, 새 컨트랙트를 가리키는지 확인한다.
  */
+require('./env');   // .env 로드 (있으면)
 const { ethers } = require('ethers');
 const fs = require('fs');
 const path = require('path');

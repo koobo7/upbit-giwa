@@ -13,6 +13,7 @@
  *
  * 종료는 Ctrl+C. 상태는 web/agent-activity.json에 기록되어 대시보드가 읽는다.
  */
+require('./env');   // .env 로드 (있으면)
 const { ethers } = require('ethers');
 const fs = require('fs');
 const path = require('path');

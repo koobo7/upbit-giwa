@@ -12,6 +12,7 @@
  * 위임자(principal) 주소는 PRINCIPAL 환경변수나 demo-wallets.json 옆의
  * deployed.json deployer를 기본값으로 쓴다.
  */
+require('./env');   // .env 로드 (있으면)
 const { ethers } = require('ethers');
 const fs = require('fs');
 const path = require('path');

@@ -11,6 +11,7 @@
  * 주의: 이 스크립트는 L1(Sepolia)에서 트랜잭션을 보낸다.
  *       PRIVATE_KEY는 환경변수로만 넘기고 파일에 저장하지 말 것.
  */
+require('./env');   // .env 로드 (있으면)
 const { ethers } = require('ethers');
 const readline = require('readline');
 

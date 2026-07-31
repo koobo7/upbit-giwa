@@ -7,6 +7,7 @@
  * 다른 RPC를 쓰려면 RPC_URL 환경변수로 덮어쓰세요.
  * 배포가 끝나면 deployed.json에 주소가 저장되고, 데모/대시보드가 그걸 읽습니다.
  */
+require('./env');   // .env 로드 (있으면)
 const { ethers } = require('ethers');
 const fs = require('fs');
 const path = require('path');

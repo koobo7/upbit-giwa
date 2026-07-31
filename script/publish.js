@@ -10,6 +10,7 @@
  * 원격 동기화까지 하려면 REMOTE 환경변수에 ssh 대상을 넣는다.
  *   REMOTE=mac-mini node script/publish.js
  */
+require('./env');   // .env 로드 (있으면)
 const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');

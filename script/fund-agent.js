@@ -7,6 +7,7 @@
  * 직접 낸다. 둘은 별개다. 이 구조 자체가 설계 의도이기도 하다 —
  * 에이전트는 결제 권한만 위임받을 뿐 위임자의 지갑을 직접 쓰지 못한다.
  */
+require('./env');   // .env 로드 (있으면)
 const { ethers } = require('ethers');
 const fs = require('fs');
 const path = require('path');
