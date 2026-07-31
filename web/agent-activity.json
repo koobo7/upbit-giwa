@@ -254,9 +254,53 @@
       "planTitle": "개발 인프라 사용료 정산",
       "rail": "onchain",
       "anomaly": "merchant"
+    },
+    {
+      "at": 1785473745436,
+      "merchant": "배달 주문",
+      "amount": "0.000000007081",
+      "status": "paid",
+      "txHash": "0x3456b463fe9e70cc2cc77d7700e5ce582239091993ff1ec076afd7afd271130e",
+      "planId": "T-3",
+      "planTitle": "생활용품 정기 주문",
+      "rail": "settled",
+      "anomaly": null
+    },
+    {
+      "at": 1785473794785,
+      "merchant": "GitHub Copilot",
+      "amount": "0.000000005939",
+      "status": "paid",
+      "txHash": "0x9a43d3857abf223326f26a767f0e5a847a07f0f589f5205d0e5d8a4550a2c971",
+      "planId": "T-1",
+      "planTitle": "구독 서비스 자동 갱신",
+      "rail": "settled",
+      "anomaly": null
+    },
+    {
+      "at": 1785473839876,
+      "merchant": "미등록 수취처 (쿠팡 생필품 사칭)",
+      "amount": "0.00000000529",
+      "status": "blocked",
+      "reason": "RECIPIENT_NOT_ALLOWED",
+      "planId": "T-3",
+      "planTitle": "생활용품 정기 주문",
+      "rail": "settled",
+      "anomaly": "recipient"
+    },
+    {
+      "at": 1785473889197,
+      "merchant": "도메인 갱신",
+      "amount": "0.000000005465",
+      "status": "paid",
+      "txHash": "0x3cfbbf8e6e3383a0cfc9e40008e65f023fc9407dca9199596c6767ccb00ec12d",
+      "planId": "T-2",
+      "planTitle": "개발 인프라 사용료 정산",
+      "rail": "onchain",
+      "anomaly": null
     }
   ],
-  "updatedAt": "2026-07-31T04:54:56.070Z",
+  "updatedAt": "2026-07-31T04:58:09.237Z",
   "agent": "0xa686210a6291Da6A535E47592c087118604C8A47",
   "principal": "0x538F0C6c18014D3C31af08f0e25D8404D893A66F",
   "intervalSec": 45,
@@ -288,6 +332,6 @@
       ]
     }
   ],
-  "remainingToday": "0.000019879262",
-  "remainingTotal": "0.000199879262"
+  "remainingToday": "0.000019860777",
+  "remainingTotal": "0.000199860777"
 }
