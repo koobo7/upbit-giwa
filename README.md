@@ -15,7 +15,7 @@ GASOK(가속) 프로그램 · 트랙 4 (AI / Web3) 지원 프로젝트.
 ```bash
 npm install
 npm run build      # 컨트랙트 컴파일
-npm test           # 26개 규칙 테스트
+npm test           # 28개 규칙 테스트
 npm run demo       # 데모 시나리오 (영상용)
 ```
 
@@ -78,7 +78,7 @@ contracts/DelegationVault.sol   위임 규칙을 강제하는 핵심 컨트랙�
 script/deploy.js                GIWA Sepolia 배포
 script/demo.js                  데모데이 영상용 시나리오
 web/index.html                  위임 발급·회수·감사 로그 대시보드 (단일 파일)
-test.js                         26개 규칙 검증
+test.js                         28개 규칙 검증
 compile.js                      solc 컴파일 (빌드 산출물: build/)
 APPLICATION_KO.md               GASOK 지원서 초안
 ```
@@ -94,6 +94,7 @@ APPLICATION_KO.md               GASOK 지원서 초안
 | 만료 | 시각이 지나면 아무 조치 없이도 자동 무효 |
 | 즉시 회수 | 위임자가 트랜잭션 하나로 전체 권한 소멸 |
 | 감사 로그 | 모든 결제가 메모와 함께 온체인 이벤트로 기록 |
+| 금고 자기송금 차단 | 수취인을 금고 자신으로 지정하면 `SelfRecipient`. 회수 불가능한 자금 소각을 막습니다 |
 
 설계 시 신경 쓴 부분:
 
@@ -126,9 +127,13 @@ APPLICATION_KO.md               GASOK 지원서 초안
 
 ## 제출 전 체크리스트
 
+- [x] `npm test` 통과 — 28개 전부 (Node 24.13.0에서 확인)
+- [x] `npm run demo` 4장면 정상 재생
+- [x] 깃허브 저장소 푸시
+- [ ] 깃허브 저장소 **공개 설정 확인** (private이면 심사위원이 못 봅니다)
 - [ ] GIWA 테스트넷에 배포하고 익스플로러 링크 확보
 - [ ] `npm test` 통과 스크린샷
 - [ ] 데모 영상 녹화 및 업로드
-- [ ] 깃허브 저장소 공개
+- [ ] `TEAM.md` 대괄호 채우기
 - [ ] 신청서에 트랙 4 선택
 - [ ] **마감: 2026-07-31 23:59:59 KST**
