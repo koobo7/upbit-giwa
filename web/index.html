@@ -78,7 +78,7 @@
   </section>
 
   <section class="card full" id="demoCard" style="display:none">
-    <h2>데모 시나리오 <span style="color:var(--warn);text-transform:none;letter-spacing:0">영상 촬영용</span></h2>
+    <h2>직접 확인해 보기</h2>
     <div id="demoBody"></div>
   </section>
 
@@ -240,6 +240,11 @@ async function connectWallet(silent = false) {
     try {
       await provider.send("wallet_switchEthereumChain", [{ chainId: GIWA.chainIdHex }]);
     } catch (e) {
+      // 사용자가 전환을 거절했다면 추가까지 시도해 팝업을 두 번 띄우지 않는다.
+      if (e?.code === 4001 || e?.code === "ACTION_REJECTED" || /reject/i.test(e?.message || "")) {
+        alert("GIWA Sepolia 연결이 취소되었습니다.\n\n다시 [지갑 연결]을 누른 뒤 네트워크 전환을 승인해 주세요.");
+        return false;
+      }
       // 4902 = 지갑에 해당 체인이 없음. 추가를 시도한다.
       try {
         await provider.send("wallet_addEthereumChain", [{
@@ -248,16 +253,23 @@ async function connectWallet(silent = false) {
           nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
         }]);
       } catch (e2) {
-        return alert(
-          "GIWA Sepolia 네트워크 추가에 실패했습니다.\n\n" +
-          "지갑에서 직접 추가해 주세요:\n" +
-          `  네트워크 이름: ${GIWA.name}\n` +
-          `  RPC URL: ${GIWA.rpc}\n` +
-          `  체인 ID: ${GIWA.chainId}\n` +
-          "  통화 기호: ETH\n" +
-          `  익스플로러: ${GIWA.explorer}\n\n` +
-          (e2?.message || "")
-        );
+        // 4001 / ACTION_REJECTED = 사용자가 팝업에서 거절한 것. 오류가 아니다.
+        const rejected = e2?.code === 4001 || e2?.code === "ACTION_REJECTED"
+          || /reject/i.test(e2?.message || "");
+        if (rejected) {
+          alert("GIWA Sepolia 연결이 취소되었습니다.\n\n다시 [지갑 연결]을 누른 뒤 네트워크 전환을 승인해 주세요.");
+        } else {
+          alert(
+            "GIWA Sepolia 네트워크를 자동으로 추가하지 못했습니다.\n\n" +
+            "지갑에서 직접 추가해 주세요:\n" +
+            `  네트워크 이름: ${GIWA.name}\n` +
+            `  RPC URL: ${GIWA.rpc}\n` +
+            `  체인 ID: ${GIWA.chainId}\n` +
+            "  통화 기호: ETH\n" +
+            `  익스플로러: ${GIWA.explorer}`
+          );
+        }
+        return false;
       }
     }
     provider = new ethers.BrowserProvider(eth);
@@ -297,8 +309,8 @@ async function connectWallet(silent = false) {
 
 $("connect").onclick = () => connectWallet(false);
 
-/* 데모 시나리오 패널.
-   web/demo-actors.json(공개 주소만)이 있으면 촬영용 안내와 자동 채움 버튼을 띄운다.
+/* 체험 패널.
+   web/demo-actors.json(공개 주소만)이 있으면 시연용 주소와 자동 채움 버튼을 띄운다.
    개인키는 이 파일에 없다 — 에이전트 결제는 script/agent.js가 수행한다. */
 (async function initDemoPanel() {
   let a;
@@ -308,6 +320,14 @@ $("connect").onclick = () => connectWallet(false);
     a = await r.json();
   } catch { return; }
   if (!a?.agent?.address) return;
+
+  // 명령어는 실제 주소를 넣어 통째로 복사할 수 있게 한다.
+  const cmd = (text) => `
+    <div style="display:flex;align-items:center;gap:8px;margin:4px 0 4px 14px;flex-wrap:wrap">
+      <span class="mono" style="flex:1;min-width:300px;word-break:break-all">${text}</span>
+      <button class="ghost" data-copy="${text.replace(/"/g, "&quot;")}"
+              style="padding:3px 9px;font-size:11px">복사</button>
+    </div>`;
 
   const row = (label, addr, hint) => `
     <div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid #1b2027;flex-wrap:wrap">
@@ -319,26 +339,41 @@ $("connect").onclick = () => connectWallet(false);
   $("demoCard").style.display = "";
   $("demoBody").innerHTML = `
     <div class="dim" style="font-size:12px;margin-bottom:12px">
-      아래 주소로 위임장을 발급한 뒤, 터미널에서 에이전트를 실행하면
-      <b>한도 안의 결제는 통과하고 한도를 넘는 결제는 컨트랙트가 거절</b>합니다.
+      아래 세 주소로 위임 → 결제 → 차단 → 회수를 직접 확인할 수 있습니다.
+      <b>한도 안의 결제는 통과하고, 한도를 넘거나 등록되지 않은 곳으로 가는 결제는 컨트랙트가 거절</b>합니다.
     </div>
-    ${row("에이전트", a.agent.address, "AI가 쓰는 지갑. 1번 카드에 넣습니다")}
-    ${row("허용된 상점", a.shopA.address, "화이트리스트에 등록 → 결제 성공")}
-    ${row("낯선 주소", a.strangerB.address, "등록 안 함 → 결제 차단")}
+    ${row("에이전트", a.agent.address, "AI가 사용하는 지갑. 이 주소에 권한을 위임합니다")}
+    ${row("허용된 상점", a.shopA.address, "화이트리스트에 등록된 수취인 · 결제 통과")}
+    ${row("낯선 주소", a.strangerB.address, "등록되지 않은 수취인 · 결제 차단")}
 
     <div class="row" style="margin-top:14px">
-      <button id="btnFillDemo">이 값으로 자동 채우기</button>
+      <button id="btnFillDemo">위 주소로 자동 채우기</button>
     </div>
 
     <div style="margin-top:16px;border-top:1px solid var(--line);padding-top:12px">
-      <div style="margin-bottom:6px"><b>촬영 순서</b></div>
+      <div style="margin-bottom:8px"><b>시연 순서</b></div>
       <div class="dim" style="font-size:12px;line-height:1.9">
-        1. <b>자동 채우기</b> → <b>금고에 예치</b> (0.002 정도) → <b>위임장 발급</b><br>
-        2. 터미널: <span class="mono">node script/agent.js pay &lt;상점주소&gt; 0.0005 "구독 결제"</span> → 통과<br>
-        3. 터미널: <span class="mono">node script/agent.js pay &lt;상점주소&gt; 0.01 "한도 초과"</span> → <b>PerTxLimitExceeded</b><br>
-        4. 터미널: <span class="mono">node script/agent.js pay &lt;낯선주소&gt; 0.0005 "모르는 곳"</span> → <b>RecipientNotAllowed</b><br>
-        5. 이 화면에서 <b>즉시 회수</b> → 다시 2번 실행 → <b>DelegationInactive</b><br>
-        6. 3번 카드(감사 로그)에 결제 내역이 온체인으로 남은 것을 보여주며 마무리
+        <b>1.</b> 위 <b>자동 채우기</b> → <b>금고에 예치</b>(0.002) → <b>위임장 발급</b><br>
+        <span style="padding-left:14px">건당 0.001 / 일일 0.002 / 총 0.003 ETH, 허용 수취인은 상점 하나뿐입니다.</span><br><br>
+
+        <b>2.</b> 한도 안에서는 사람 개입 없이 결제됩니다<br>
+        ${cmd(`node script/agent.js pay ${a.shopA.address} 0.0005 "구독 결제"`)}
+        <span style="padding-left:14px">→ 통과. 아래 감사 로그에 즉시 기록됩니다.</span><br><br>
+
+        <b>3.</b> 에이전트가 탈취됐다고 가정하고 한도를 넘겨 봅니다<br>
+        ${cmd(`node script/agent.js pay ${a.shopA.address} 0.01 "한도 초과"`)}
+        <span style="padding-left:14px">→ <b class="no">PerTxLimitExceeded</b>. 앱이 아니라 컨트랙트가 거절합니다.</span><br><br>
+
+        <b>4.</b> 등록되지 않은 곳으로 보내 봅니다<br>
+        ${cmd(`node script/agent.js pay ${a.strangerB.address} 0.0005 "모르는 곳"`)}
+        <span style="padding-left:14px">→ <b class="no">RecipientNotAllowed</b></span><br><br>
+
+        <b>5.</b> 이 화면에서 <b>즉시 회수</b>를 누른 뒤 2번을 다시 실행<br>
+        <span style="padding-left:14px">→ <b class="no">DelegationInactive</b>. 회수 즉시 한 푼도 쓸 수 없습니다.</span>
+      </div>
+      <div class="note" style="margin-top:12px">
+        모든 판정은 GIWA Sepolia에 배포된 컨트랙트가 직접 내립니다.
+        이 화면을 닫아도, 서버가 멈춰도 한도는 그대로 강제됩니다.
       </div>
     </div>`;
 
