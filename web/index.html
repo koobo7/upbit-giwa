@@ -747,7 +747,7 @@ async function openAgentDialog() {
     $("liveDot").style.background = live ? "var(--accent)" : "var(--dim)";
     $("liveDot").style.animation = live ? "pulse 2s infinite" : "none";
     $("liveMeta").textContent = live
-      ? `${a.intervalSec}초마다 결제 · 오늘 남은 한도 ${Number(a.remainingToday).toFixed(8)} ETH`
+      ? `오늘 남은 한도 ${Number(a.remainingToday).toFixed(8)} ETH`
       : `일시 중지 · 마지막 활동 ${ago(last.at)}`;
 
     const paid = a.events.filter(e => e.status === "paid").length;
