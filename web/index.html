@@ -146,8 +146,18 @@
 
   <section class="card">
     <h2>1. 위임장 발급</h2>
-    <label>에이전트 지갑 주소 <span class="dim" style="font-weight:400">· 마지막 입력값 자동 채움</span></label>
-    <input id="agent" class="mono" placeholder="0x..." />
+    <label style="display:flex;align-items:center;gap:8px">
+      <span>에이전트 지갑</span>
+      <span class="spacer" style="flex:1"></span>
+      <button class="ghost" id="btnManageAgent" type="button"
+              style="padding:2px 9px;font-size:11px;font-weight:400">지갑 선택</button>
+    </label>
+    <div id="agentPick" class="mono" style="background:#0b0e12;border:1px solid var(--line);
+         border-radius:8px;padding:9px 11px;font-size:13px;min-height:38px;
+         display:flex;align-items:center;gap:8px;cursor:pointer">
+      <span class="dim">지갑 선택을 눌러 에이전트를 고르세요</span>
+    </div>
+    <input id="agent" class="mono" type="hidden" />
     <div class="grid2">
       <div><label>건당 한도 (ETH)</label><input id="perTx" value="0.5" /></div>
       <div><label>일일 한도 (ETH)</label><input id="daily" value="1" /></div>
@@ -161,7 +171,12 @@
       <button class="ghost" id="btnManageRecip" type="button"
               style="padding:2px 9px;font-size:11px;font-weight:400">수취인 관리</button>
     </label>
-    <input id="recipients" class="mono" placeholder="0xshop..., 0xapi..." />
+    <div id="recipPick" style="background:#0b0e12;border:1px solid var(--line);border-radius:8px;
+         padding:9px 11px;min-height:38px;display:flex;align-items:center;gap:6px;
+         flex-wrap:wrap;cursor:pointer">
+      <span class="dim" style="font-size:12px">수취인 관리를 눌러 허용할 곳을 고르세요</span>
+    </div>
+    <input id="recipients" class="mono" type="hidden" />
     <div class="row">
       <button id="btnCreate">위임장 발급</button>
       <button class="ghost" id="btnDeposit">금고에 예치</button>
@@ -563,6 +578,9 @@ function readProvider() {
       const cur = {};
       for (const k of ids) cur[k] = $(k)?.value ?? "";
       localStorage.setItem(KEY, JSON.stringify(cur));
+      // 숨은 input이 바뀌면 라벨 표시도 따라 갱신한다.
+      if (id === "agent") paintAgentPick?.();
+      if (id === "recipients") paintRecipPick?.();
     });
   }
 
@@ -580,10 +598,138 @@ function readProvider() {
         $("total").value = "0.0002";
         $("days").value = "30";
         ids.forEach(id => $(id)?.dispatchEvent(new Event("input")));
+        paintAgentPick(); paintRecipPick();
       })
       .catch(() => {});
   }
 })();
+
+/* ─────────── 에이전트 지갑 선택 ───────────
+   위임은 컨트랙트에 _delegations[principal][agent]로 저장되므로 에이전트마다
+   지갑이 달라야 한다. 한 지갑을 공유하면 한도가 섞이고, 하나가 탈취되면 전부
+   뚫리며, 개별 회수도 불가능하다.
+
+   개인키는 여기서 만들지 않는다. 지갑은 에이전트 쪽에서 생성하고 이 화면에는
+   주소만 등록한다 — 실제 운영과 같은 방식이다. */
+let DEMO_AGENTS = [];
+
+/** 주소를 아는 이름으로 바꾼다. */
+function labelOfAgent(addr) {
+  if (!addr) return null;
+  const hit = DEMO_AGENTS.find(a => a.address.toLowerCase() === addr.toLowerCase());
+  if (hit) return { icon: hit.icon, label: hit.label, vendor: hit.vendor };
+  const linked = loadAgents().find(g => g.wallet?.toLowerCase() === addr.toLowerCase());
+  if (linked) return { icon: linked.icon, label: linked.nickname || linked.name, vendor: linked.vendor };
+  return null;
+}
+
+function paintAgentPick() {
+  const addr = $("agent").value.trim();
+  const el = $("agentPick");
+  if (!ethers.isAddress(addr)) {
+    el.innerHTML = `<span class="dim">지갑 선택을 눌러 에이전트를 고르세요</span>`;
+    return;
+  }
+  const l = labelOfAgent(addr);
+  el.innerHTML = l
+    ? `<span style="font-size:15px">${l.icon}</span>
+       <b style="font-family:inherit">${l.label}</b>
+       <span class="dim" style="font-family:inherit;font-size:11px">${l.vendor ?? ""}</span>
+       <span class="spacer" style="flex:1"></span>
+       <span class="dim" style="font-size:11px">${short(addr)}</span>`
+    : `<span class="mono">${addr}</span>`;
+}
+
+async function openAgentPickDialog() {
+  // 각 지갑의 위임 상태를 함께 보여준다.
+  const rows = await Promise.all(DEMO_AGENTS.map(async (a) => {
+    let state = "";
+    if (vault && me) {
+      try {
+        const d = await vault.getDelegation(me, a.address);
+        state = d.expiry === 0n ? `<span class="badge dim">위임 없음</span>`
+          : !d.active ? `<span class="badge no">회수됨</span>`
+          : BigInt(Math.floor(Date.now() / 1000)) >= d.expiry ? `<span class="badge no">만료</span>`
+          : `<span class="badge ok">활성</span>`;
+      } catch {}
+    }
+    const sel = $("agent").value.trim().toLowerCase() === a.address.toLowerCase();
+    return `
+      <div data-pick="${a.address}" style="display:flex;align-items:center;gap:11px;padding:10px 8px;
+           border-bottom:1px solid #1b2027;cursor:pointer;border-radius:8px;
+           ${sel ? "background:#0b0e12" : ""}">
+        <div style="width:32px;height:32px;border-radius:9px;background:#0b0e12;border:1px solid var(--line);
+                    display:flex;align-items:center;justify-content:center;font-size:15px">${a.icon}</div>
+        <div style="flex:1;min-width:0">
+          <div><b>${a.label}</b> ${state}</div>
+          <div class="dim" style="font-size:11px">${a.vendor}</div>
+          <div class="mono dim" style="font-size:10px">${a.address}</div>
+        </div>
+        ${sel ? `<span class="ok">선택됨</span>` : ""}
+      </div>`;
+  }));
+
+  $("dlgBody").innerHTML = `
+    <h2 style="margin:0 0 4px">에이전트 지갑 선택</h2>
+    <div class="dim" style="font-size:11px;margin-bottom:12px">
+      위임은 <b>에이전트 주소마다 따로</b> 발급됩니다. 한 지갑을 여러 에이전트가 쓰면
+      한도가 섞이고 개별 회수도 할 수 없습니다.</div>
+    <div style="max-height:40vh;overflow:auto">${rows.join("")}</div>
+    <label style="margin-top:14px">직접 입력
+      <span class="dim" style="font-weight:400">· 에이전트가 만든 지갑 주소</span></label>
+    <input id="customAgent" class="mono" placeholder="0x…" value="" />
+    <div class="row">
+      <button id="agentUse">이 주소 사용</button>
+      <button class="ghost" id="agentClose">닫기</button>
+    </div>
+    <div class="note" style="margin-top:10px">
+      개인키는 이 화면에서 만들지 않습니다. 지갑은 에이전트 쪽에서 생성하고
+      여기에는 주소만 등록합니다.
+    </div>`;
+  $("dlg").style.display = "flex";
+
+  const pick = (addr) => {
+    $("agent").value = addr;
+    $("agent").dispatchEvent(new Event("input"));
+    paintAgentPick();
+    $("dlg").style.display = "none";
+    refresh();
+  };
+  $("dlgBody").querySelectorAll("[data-pick]").forEach(el => {
+    el.onclick = () => pick(el.dataset.pick);
+  });
+  $("agentUse").onclick = () => {
+    const a = $("customAgent").value.trim();
+    if (!ethers.isAddress(a)) return alert("주소 형식이 올바르지 않습니다.");
+    pick(a);
+  };
+  $("agentClose").onclick = () => { $("dlg").style.display = "none"; };
+}
+
+$("btnManageAgent").onclick = () => openAgentPickDialog().catch(e =>
+  alert(e.shortMessage ?? e.message ?? String(e)));
+$("agentPick").onclick = () => $("btnManageAgent").click();
+
+/** 허용 수취인을 라벨 칩으로 보여준다. 주소 나열은 사람이 읽을 수 없다. */
+function paintRecipPick() {
+  const addrs = $("recipients").value.split(",").map(s => s.trim()).filter(ethers.isAddress);
+  const el = $("recipPick");
+  if (!addrs.length) {
+    el.innerHTML = `<span class="dim" style="font-size:12px">수취인 관리를 눌러 허용할 곳을 고르세요</span>`;
+    return;
+  }
+  const nameOf = (a) => {
+    const m = (DEMO_MERCHANTS ?? []).find(x => x.address.toLowerCase() === a.toLowerCase());
+    if (m) return m.name;
+    if (DEMO_ACTORS?.shopA?.address?.toLowerCase() === a.toLowerCase()) return "상점 A";
+    if (DEMO_ACTORS?.strangerB?.address?.toLowerCase() === a.toLowerCase()) return "낯선 주소";
+    return short(a);
+  };
+  el.innerHTML = addrs.map(a =>
+    `<span class="badge" style="font-family:inherit;font-size:11px" title="${a}">${nameOf(a)}</span>`
+  ).join("") + `<span class="spacer" style="flex:1"></span>
+    <span class="dim" style="font-size:11px">${addrs.length}곳</span>`;
+}
 
 /* ─────────── 허용 수취인 관리 ───────────
    위임 발급 후에도 수취인을 추가·차단·해제할 수 있게 한다.
@@ -649,6 +795,13 @@ async function openRecipientDialog() {
     try {
       await (await vault.setRecipients(agent, [addr], allowed)).wait();
       msg(`${short(addr)} → ${allowed ? "허용" : "차단"} 완료`, "ok");
+      // 입력값(숨은 필드)도 온체인 상태에 맞춰 동기화한다.
+      const cur = $("recipients").value.split(",").map(s => s.trim()).filter(ethers.isAddress);
+      const next = allowed
+        ? [...new Set([...cur, addr])]
+        : cur.filter(x => x.toLowerCase() !== addr.toLowerCase());
+      $("recipients").value = next.join(", ");
+      $("recipients").dispatchEvent(new Event("input"));
       openRecipientDialog();   // 상태를 다시 읽어 그린다
       refresh();
     } catch (e) {
@@ -1073,6 +1226,12 @@ async function openAgentDialog() {
   if (!a?.agent?.address) return;
   DEMO_ACTORS = a;
   DEMO_MERCHANTS = a.merchants ?? [];
+  try {
+    const ra = await fetch("./demo-agents.json", { cache: "no-store" });
+    if (ra.ok) DEMO_AGENTS = await ra.json();
+  } catch {}
+  paintAgentPick();
+  paintRecipPick();
   const hint = $("merchantHint");
   if (hint) {
     hint.innerHTML = DEMO_MERCHANTS.length

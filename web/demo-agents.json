@@ -1,0 +1,23 @@
+[
+  {
+    "id": "claude-code",
+    "label": "클로",
+    "vendor": "Anthropic",
+    "icon": "◆",
+    "address": "0xa686210a6291Da6A535E47592c087118604C8A47"
+  },
+  {
+    "id": "openai-operator",
+    "label": "오퍼",
+    "vendor": "OpenAI",
+    "icon": "●",
+    "address": "0x6524D9a336954D55A13A133c1664F02915573051"
+  },
+  {
+    "id": "autogpt",
+    "label": "GPT",
+    "vendor": "Significant Gravitas",
+    "icon": "▣",
+    "address": "0xb92495217534fC26CbDa21C9200C3A0440e49098"
+  }
+]
