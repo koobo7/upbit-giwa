@@ -64,7 +64,7 @@
     70%{box-shadow:0 0 0 7px rgba(74,222,128,0)}
     100%{box-shadow:0 0 0 0 rgba(74,222,128,0)}
   }
-  #log{max-height:260px;overflow:auto}
+  #log{overflow-x:auto}
 </style>
 </head>
 <body>
@@ -186,6 +186,7 @@
     <div id="log">
       <div class="empty">아직 기록이 없습니다.</div>
     </div>
+    <div id="logPager"></div>
     <div class="note">
       모든 결제는 <span class="mono">Spent</span> 이벤트로 체인에 남습니다.
       누가·언제·어디에·얼마를 썼는지 사후에 부인할 수 없습니다.
@@ -409,6 +410,68 @@ async function connectWallet(silent = false) {
 
 $("connect").onclick = () => connectWallet(false);
 
+/* 온체인 감사 로그 렌더링 + 페이지네이션.
+   지갑 연결 여부와 무관하게 같은 함수로 그린다. */
+let LOG_EVENTS = [];
+let logPage = 1;
+let logPageSize = Number(localStorage.getItem("ingam.logPageSize")) || 10;
+
+function renderLog() {
+  const all = LOG_EVENTS;
+  if (!all.length) {
+    $("log").innerHTML = `<div class="empty">아직 결제 기록이 없습니다.</div>`;
+    $("logPager").innerHTML = "";
+    return;
+  }
+  const totalPages = Math.max(1, Math.ceil(all.length / logPageSize));
+  if (logPage > totalPages) logPage = totalPages;
+  const shown = all.slice((logPage - 1) * logPageSize, logPage * logPageSize);
+
+  $("log").innerHTML = `<table>
+    <thead><tr><th>블록</th><th>수취인</th><th>금액</th><th>메모</th><th></th></tr></thead>
+    <tbody>${shown.map(l => `
+      <tr>
+        <td class="mono dim">#${l.blockNumber}</td>
+        <td class="mono">${short(l.args.recipient)}</td>
+        <td>${F(l.args.amount)} ETH</td>
+        <td class="dim">${l.args.memo || "-"}</td>
+        <td class="mono"><a class="dim" target="_blank"
+          href="${GIWA.explorer}/tx/${l.transactionHash}">보기</a></td>
+      </tr>`).join("")}</tbody></table>`;
+
+  $("logPager").innerHTML = `
+    <div class="row" style="align-items:center;margin-top:12px">
+      <button class="ghost" id="lgFirst" ${logPage === 1 ? "disabled" : ""}
+              style="padding:4px 10px;font-size:11px">«</button>
+      <button class="ghost" id="lgPrev" ${logPage === 1 ? "disabled" : ""}
+              style="padding:4px 10px;font-size:11px">이전</button>
+      <span class="dim" style="font-size:12px">${logPage} / ${totalPages} 쪽 · 전체 ${all.length}건</span>
+      <button class="ghost" id="lgNext" ${logPage === totalPages ? "disabled" : ""}
+              style="padding:4px 10px;font-size:11px">다음</button>
+      <button class="ghost" id="lgLast" ${logPage === totalPages ? "disabled" : ""}
+              style="padding:4px 10px;font-size:11px">»</button>
+      <span class="spacer" style="flex:1"></span>
+      <label style="margin:0;display:flex;align-items:center;gap:6px;font-size:11px">쪽당
+        <select id="lgSize" style="width:auto;padding:4px 8px;font-size:11px">
+          ${[10, 20, 50, 100].map(n =>
+            `<option value="${n}" ${n === logPageSize ? "selected" : ""}>${n}</option>`).join("")}
+        </select>
+      </label>
+    </div>`;
+
+  const go = (p) => { logPage = Math.min(Math.max(1, p), totalPages); renderLog(); };
+  $("lgFirst").onclick = () => go(1);
+  $("lgPrev").onclick  = () => go(logPage - 1);
+  $("lgNext").onclick  = () => go(logPage + 1);
+  $("lgLast").onclick  = () => go(totalPages);
+  $("lgSize").onchange = (ev) => {
+    logPageSize = Number(ev.target.value);
+    localStorage.setItem("ingam.logPageSize", String(logPageSize));
+    logPage = 1;
+    renderLog();
+  };
+}
+
 /* 지갑 없이도 체인을 읽기 위한 provider.
    심사자는 지갑을 연결하지 않고 들어온다. 감사 로그는 공개 정보이므로
    RPC로 직접 조회해 첫 화면부터 보이게 한다. */
@@ -437,18 +500,8 @@ function readProvider() {
     const spent = await c.queryFilter(c.filters.Spent(), from);
     if (!spent.length) return;
 
-    const rows = spent.slice(-30).reverse().map(l => `
-      <tr>
-        <td class="mono dim">#${l.blockNumber}</td>
-        <td class="mono">${short(l.args.recipient)}</td>
-        <td>${F(l.args.amount)} ETH</td>
-        <td class="dim">${l.args.memo || "-"}</td>
-        <td class="mono"><a class="dim" target="_blank"
-          href="${GIWA.explorer}/tx/${l.transactionHash}">보기</a></td>
-      </tr>`).join("");
-    $("log").innerHTML = `<table>
-      <thead><tr><th>블록</th><th>수취인</th><th>금액</th><th>메모</th><th></th></tr></thead>
-      <tbody>${rows}</tbody></table>`;
+    LOG_EVENTS = spent.slice().reverse();
+    renderLog();
 
     // 지갑을 연결하지 않아도 새 결제가 들어오면 갱신되도록 주기 조회를 건다.
     setInterval(async () => {
@@ -699,8 +752,11 @@ async function openAgentDialog() {
       <tr>
         <td class="dim" style="white-space:nowrap">${ago(e.at)}</td>
         <td style="white-space:nowrap">${who}</td>
-        <td>${e.merchant}
-          ${e.planId ? `<div class="dim" style="font-size:10px">${e.planId} · ${e.planTitle}</div>` : ""}</td>
+        <td>${e.anomaly ? `<span class="no" title="계획에 없는 시도">⚠ </span>` : ""}${e.merchant}
+          ${e.planId ? `<div class="dim" style="font-size:10px">${e.planId} · ${e.planTitle}${
+            e.anomaly === "recipient" ? " · 허용되지 않은 수취처"
+            : e.anomaly === "pertx" ? " · 건당 한도 초과 금액"
+            : ""}</div>` : ""}</td>
         <td class="mono">${Number(e.amount).toFixed(8)}</td>
         <td>${e.rail ? railBadge(e.rail) : ""}</td>
         <td>${e.status === "paid"
@@ -1143,22 +1199,8 @@ async function loadLog(agent) {
   const head = await rp.getBlockNumber();
   const from = DEPLOY_BLOCK ?? Math.max(0, head - 9000);
   const spent = await vault.queryFilter(vault.filters.Spent(null, agent), from);
-  if (spent.length === 0) {
-    $("log").innerHTML = `<div class="empty">아직 결제 기록이 없습니다.</div>`;
-    return;
-  }
-  const rows = spent.slice(-30).reverse().map(l => `
-    <tr>
-      <td class="mono dim">#${l.blockNumber}</td>
-      <td class="mono">${short(l.args.recipient)}</td>
-      <td>${F(l.args.amount)} ETH</td>
-      <td class="dim">${l.args.memo || "-"}</td>
-      <td class="mono"><a class="dim" target="_blank"
-        href="${GIWA.explorer}/tx/${l.transactionHash}">보기</a></td>
-    </tr>`).join("");
-  $("log").innerHTML = `<table>
-    <thead><tr><th>블록</th><th>수취인</th><th>금액</th><th>메모</th><th></th></tr></thead>
-    <tbody>${rows}</tbody></table>`;
+  LOG_EVENTS = spent.slice().reverse();
+  renderLog();
 }
 
 let watchTimer = null;

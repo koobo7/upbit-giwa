@@ -56,14 +56,14 @@ function loadMerchants() {
 //   onchain  — 수취인이 직접 온체인 정산 (API 크레딧, 클라우드 등)
 //   settled  — 정산 파트너가 법정통화로 대납하고 온체인에서 정산
 const CATALOG = {
-  '넷플릭스 구독':      ['월 구독료',        0.0000012, 'settled'],
-  'OpenAI API 크레딧': ['API 사용료 정산',   0.0000018, 'onchain'],
-  'AWS 사용료':        ['클라우드 사용료',   0.0000015, 'onchain'],
-  '쿠팡 생필품':        ['생필품 자동 주문',  0.0000010, 'settled'],
-  '스포티파이 구독':     ['월 구독료',        0.0000008, 'settled'],
-  '도메인 갱신':        ['도메인 연장',      0.0000012, 'onchain'],
-  'GitHub Copilot':   ['월 구독료',        0.0000011, 'settled'],
-  '배달 주문':          ['점심 주문',        0.0000014, 'settled'],
+  '넷플릭스 구독':      ['월 구독료',        0.000000006,  'settled'],
+  'OpenAI API 크레딧': ['API 사용료 정산',   0.000000009,  'onchain'],
+  'AWS 사용료':        ['클라우드 사용료',   0.0000000075, 'onchain'],
+  '쿠팡 생필품':        ['생필품 자동 주문',  0.000000005,  'settled'],
+  '스포티파이 구독':     ['월 구독료',        0.000000004,  'settled'],
+  '도메인 갱신':        ['도메인 연장',      0.000000006,  'onchain'],
+  'GitHub Copilot':   ['월 구독료',        0.0000000055, 'settled'],
+  '배달 주문':          ['점심 주문',        0.000000007,  'settled'],
 };
 
 // 에이전트가 수행 중인 구매 계획. 각 결제가 어느 항목에서 비롯됐는지 남긴다.
@@ -116,30 +116,49 @@ async function main() {
   });
 
   while (running) {
-    const m = merchants[Math.floor(Math.random() * merchants.length)];
-    const [memoBase, base, rail] = CATALOG[m.name] ?? ['자동 결제', 0.000001, 'onchain'];
+    let m = merchants[Math.floor(Math.random() * merchants.length)];
+    const [memoBase, base, rail] = CATALOG[m.name] ?? ['자동 결제', 0.000000006, 'onchain'];
     const plan = planOf(m.name);
     // 금액에 약간의 편차를 줘서 매번 같은 값이 찍히지 않게 한다.
-    const amount = ethers.parseEther((base * (0.8 + Math.random() * 0.4)).toFixed(8));
+    let amount = ethers.parseEther((base * (0.8 + Math.random() * 0.4)).toFixed(12));
+
+    /* 10건 중 1~2건은 에이전트가 규칙을 벗어난 시도를 하게 만든다.
+       실제 운영에서 오작동·프롬프트 인젝션·잘못된 계획으로 일어나는 일이고,
+       컨트랙트가 그것을 실제로 거절하는 모습이 이 제품의 핵심이다.
+       로그를 꾸며내는 것이 아니라 진짜 트랜잭션을 보내 진짜로 거절당한다. */
+    const roll = Math.random();
+    let anomaly = null;
+    if (roll < 0.08) {
+      // 등록되지 않은 수취인으로 송금 시도 -> RecipientNotAllowed
+      anomaly = 'recipient';
+      m = { name: `미등록 수취처 (${m.name} 사칭)`, address: ethers.Wallet.createRandom().address };
+    } else if (roll < 0.15) {
+      // 건당 한도를 크게 넘는 금액 -> PerTxLimitExceeded
+      anomaly = 'pertx';
+      amount = ethers.parseEther('0.01');
+    }
+
     // 메모는 온체인에 남으므로 어떤 계획에서 나온 결제인지 여기 새긴다.
-    const memo = `[${plan.id}] ${m.name} · ${memoBase}`;
+    const memo = anomaly
+      ? `[${plan.id}] 비정상 시도 · ${m.name}`
+      : `[${plan.id}] ${m.name} · ${memoBase}`;
 
     let entry;
     try {
       const [ok, reason] = await vault.canSpend(PRINCIPAL, wallet.address, m.address, amount);
       if (!ok) {
         console.log(`${ts()}  차단  ${m.name.padEnd(18)} ${fmt(amount)} ETH  <- ${reason}`);
-        entry = { at: Date.now(), merchant: m.name, amount: fmt(amount), status: 'blocked', reason, planId: plan.id, planTitle: plan.title, rail };
+        entry = { at: Date.now(), merchant: m.name, amount: fmt(amount), status: 'blocked', reason, planId: plan.id, planTitle: plan.title, rail, anomaly };
       } else {
         const tx = await vault.spend(PRINCIPAL, m.address, amount, memo);
         await tx.wait();
         console.log(`${ts()}  결제  ${m.name.padEnd(18)} ${fmt(amount)} ETH  ${tx.hash.slice(0, 14)}…`);
-        entry = { at: Date.now(), merchant: m.name, amount: fmt(amount), status: 'paid', txHash: tx.hash, planId: plan.id, planTitle: plan.title, rail };
+        entry = { at: Date.now(), merchant: m.name, amount: fmt(amount), status: 'paid', txHash: tx.hash, planId: plan.id, planTitle: plan.title, rail, anomaly };
       }
     } catch (e) {
       const reason = e.revert?.name ?? e.shortMessage ?? String(e);
       console.log(`${ts()}  차단  ${m.name.padEnd(18)} ${fmt(amount)} ETH  <- ${reason}`);
-      entry = { at: Date.now(), merchant: m.name, amount: fmt(amount), status: 'blocked', reason, planId: plan.id, planTitle: plan.title, rail };
+      entry = { at: Date.now(), merchant: m.name, amount: fmt(amount), status: 'blocked', reason, planId: plan.id, planTitle: plan.title, rail, anomaly };
     }
 
     const [today, total] = await vault.remaining(PRINCIPAL, wallet.address).catch(() => [0n, 0n]);
