@@ -154,8 +154,13 @@
       <div><label>총 한도 (ETH)</label><input id="total" value="5" /></div>
       <div><label>유효 기간 (일)</label><input id="days" value="30" /></div>
     </div>
-    <label>허용 수취인 (쉼표로 구분, 비우면 제한 없음)
-      <span class="dim" style="font-weight:400">· 마지막 입력값 자동 채움</span></label>
+    <label style="display:flex;align-items:center;gap:8px">
+      <span>허용 수취인 (쉼표로 구분, 비우면 제한 없음)
+        <span class="dim" style="font-weight:400">· 마지막 입력값 자동 채움</span></span>
+      <span class="spacer" style="flex:1"></span>
+      <button class="ghost" id="btnManageRecip" type="button"
+              style="padding:2px 9px;font-size:11px;font-weight:400">수취인 관리</button>
+    </label>
     <input id="recipients" class="mono" placeholder="0xshop..., 0xapi..." />
     <div class="row">
       <button id="btnCreate">위임장 발급</button>
@@ -227,6 +232,9 @@ const ABI = [
   "function setMerchantPolicy(address agent,bool enabled)",
   "function merchantPolicyOn(bytes32 id) view returns (bool)",
   "function allowedMerchant(bytes32 id,bytes32 merchant) view returns (bool)",
+  "function setRecipients(address agent,address[] recipients,bool allowed)",
+  "function allowedRecipient(bytes32 id,address recipient) view returns (bool)",
+  "function delegationId(address principal,address agent) view returns (bytes32)",
   "event Spent(bytes32 indexed id,address indexed agent,address indexed recipient,address principal,uint256 amount,string memo,bytes32 merchant)",
   "event DelegationRevoked(bytes32 indexed id,address indexed principal,address indexed agent,uint128 totalSpent)",
 ];
@@ -236,6 +244,8 @@ let provider, signer, me, vault, VAULT_ADDR;
 let DEPLOY_BLOCK = null;
 // 가맹점 정책에 등록할 상점 목록 (demo-actors.json에서 로드).
 let DEMO_MERCHANTS = [];
+// demo-actors.json 전체 (수취인 관리 다이얼로그가 후보 목록으로 쓴다).
+let DEMO_ACTORS = null;
 
 const $ = (id) => document.getElementById(id);
 const E = (v) => ethers.parseEther(String(v).trim() || "0");
@@ -574,6 +584,94 @@ function readProvider() {
       .catch(() => {});
   }
 })();
+
+/* ─────────── 허용 수취인 관리 ───────────
+   위임 발급 후에도 수취인을 추가·차단·해제할 수 있게 한다.
+   컨트랙트의 setRecipients(agent, addresses[], allowed)를 호출하므로
+   변경은 즉시 온체인에 반영된다. */
+async function openRecipientDialog() {
+  const agent = $("agent").value.trim();
+  if (!ethers.isAddress(agent)) return alert("먼저 에이전트 주소를 입력하세요.");
+  if (!vault) return alert("지갑을 연결하세요.");
+
+  const d = await vault.getDelegation(me, agent);
+  if (d.expiry === 0n) return alert("이 에이전트에게 발급된 위임장이 없습니다.");
+
+  const id = await vault.delegationId(me, agent);
+
+  // 후보 = 입력란 + 데모 목록. 각각의 온체인 허용 여부를 조회한다.
+  const fromInput = $("recipients").value.split(",").map(s => s.trim()).filter(ethers.isAddress);
+  const fromDemo = [
+    ...(DEMO_ACTORS?.shopA ? [{ name: "상점 A", address: DEMO_ACTORS.shopA.address }] : []),
+    ...(DEMO_MERCHANTS ?? []).map(m => ({ name: m.name, address: m.address })),
+    ...(DEMO_ACTORS?.strangerB ? [{ name: "낯선 주소", address: DEMO_ACTORS.strangerB.address }] : []),
+  ];
+  const seen = new Map();
+  for (const a of fromInput) seen.set(a.toLowerCase(), { name: "", address: a });
+  for (const m of fromDemo) if (!seen.has(m.address.toLowerCase())) seen.set(m.address.toLowerCase(), m);
+  const list = [...seen.values()];
+
+  const states = await Promise.all(list.map(r =>
+    vault.allowedRecipient(id, r.address).catch(() => false)));
+  list.forEach((r, i) => { r.allowed = states[i]; });
+
+  const rows = list.map((r, i) => `
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #1b2027">
+      <div style="flex:1;min-width:0">
+        <div>${r.name || "<span class='dim'>이름 없음</span>"}
+          ${r.allowed ? `<span class="badge ok">허용</span>` : `<span class="badge dim">차단</span>`}</div>
+        <div class="mono dim" style="font-size:10px;overflow:hidden;text-overflow:ellipsis">${r.address}</div>
+      </div>
+      <button class="ghost" data-toggle="${i}" style="padding:3px 9px;font-size:11px">
+        ${r.allowed ? "차단" : "허용"}</button>
+    </div>`).join("");
+
+  $("dlgBody").innerHTML = `
+    <h2 style="margin:0 0 4px">허용 수취인 관리</h2>
+    <div class="dim" style="font-size:11px;margin-bottom:12px">
+      변경은 트랜잭션 한 건으로 즉시 온체인에 반영됩니다.
+      차단하면 그 주소로 가는 결제는 컨트랙트가 거절합니다.</div>
+
+    <div style="max-height:38vh;overflow:auto">${rows || `<div class="empty">후보가 없습니다.</div>`}</div>
+
+    <label style="margin-top:14px">새 수취인 추가</label>
+    <input id="newRecip" class="mono" placeholder="0x…" />
+    <div class="row">
+      <button id="recipAdd">추가</button>
+      <button class="ghost" id="recipClose">닫기</button>
+    </div>
+    <div class="dim" id="recipMsg" style="font-size:11px;margin-top:8px"></div>`;
+  $("dlg").style.display = "flex";
+
+  const msg = (t, cls = "dim") => { $("recipMsg").innerHTML = `<span class="${cls}">${t}</span>`; };
+  const apply = async (addr, allowed) => {
+    msg("트랜잭션 확인을 기다리는 중…");
+    try {
+      await (await vault.setRecipients(agent, [addr], allowed)).wait();
+      msg(`${short(addr)} → ${allowed ? "허용" : "차단"} 완료`, "ok");
+      openRecipientDialog();   // 상태를 다시 읽어 그린다
+      refresh();
+    } catch (e) {
+      msg(e.revert?.name ?? e.shortMessage ?? "실패", "no");
+    }
+  };
+
+  $("dlgBody").querySelectorAll("[data-toggle]").forEach(b => {
+    b.onclick = () => {
+      const r = list[Number(b.dataset.toggle)];
+      apply(r.address, !r.allowed);
+    };
+  });
+  $("recipAdd").onclick = () => {
+    const a = $("newRecip").value.trim();
+    if (!ethers.isAddress(a)) return msg("주소 형식이 올바르지 않습니다.", "no");
+    apply(a, true);
+  };
+  $("recipClose").onclick = () => { $("dlg").style.display = "none"; };
+}
+
+$("btnManageRecip").onclick = () => openRecipientDialog().catch(e =>
+  alert(e.shortMessage ?? e.message ?? String(e)));
 
 /* ─────────── 에이전트 연동 ───────────
    등록 정보는 브라우저에 저장한다. 결제 권한 자체는 온체인 위임이 관리하므로
@@ -973,6 +1071,7 @@ async function openAgentDialog() {
     a = await r.json();
   } catch { return; }
   if (!a?.agent?.address) return;
+  DEMO_ACTORS = a;
   DEMO_MERCHANTS = a.merchants ?? [];
   const hint = $("merchantHint");
   if (hint) {
