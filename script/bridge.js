@@ -14,22 +14,18 @@
 const { ethers } = require('ethers');
 const readline = require('readline');
 
-/** 키를 화면에 찍지 않고 입력받는다. 명령줄에 남지 않으므로 셸 히스토리에도 안 남는다. */
+/** 개인키를 stdin으로 입력받는다. 명령줄이 아니므로 셸 히스토리에는 남지 않는다.
+ *  터미널 마스킹은 이스케이프 문자가 입력값을 오염시켜(길이 122 오류) 쓰지 않는다. */
 function askSecret(question) {
   return new Promise((resolve) => {
-    const rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: true });
-    const onData = (ch) => {
-      // 입력 중인 글자를 지워서 화면에 보이지 않게 한다.
-      if (['\n', '\r', ''].includes(ch.toString())) return;
-      readline.moveCursor(process.stdout, -1000, 0);
-      readline.clearLine(process.stdout, 1);
-      process.stdout.write(question);
-    };
-    process.stdin.on('data', onData);
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
     rl.question(question, (ans) => {
-      process.stdin.removeListener('data', onData);
       rl.close();
-      process.stdout.write('\n');
+      try {
+        readline.moveCursor(process.stdout, 0, -1);
+        readline.clearLine(process.stdout, 0);
+        process.stdout.write(question + '************' + String.fromCharCode(10));
+      } catch {}
       resolve(ans.trim());
     });
   });
@@ -46,7 +42,7 @@ async function main() {
   // 환경변수가 있으면 그걸 쓰고, 없으면 직접 물어본다.
   let pk = process.env.PRIVATE_KEY;
   if (!pk) {
-    console.log('개인키를 입력하세요. 화면에 표시되지 않고 어디에도 저장되지 않습니다.');
+    console.log('개인키를 붙여넣고 엔터를 누르세요. 입력 후 화면에서 지워지며 어디에도 저장되지 않습니다.');
     console.log('(브레이브 지갑 > 계정 옆 ⋮ > 계정 세부정보 > 개인 키 표시)\n');
     pk = await askSecret('개인키: ');
   }
