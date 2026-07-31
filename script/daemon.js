@@ -128,14 +128,22 @@ async function main() {
        로그를 꾸며내는 것이 아니라 진짜 트랜잭션을 보내 진짜로 거절당한다. */
     const roll = Math.random();
     let anomaly = null;
-    if (roll < 0.08) {
+    let merchantHash = m.merchantId ?? ethers.ZeroHash;
+    if (roll < 0.06) {
       // 등록되지 않은 수취인으로 송금 시도 -> RecipientNotAllowed
       anomaly = 'recipient';
       m = { name: `미등록 수취처 (${m.name} 사칭)`, address: ethers.Wallet.createRandom().address };
-    } else if (roll < 0.15) {
+      merchantHash = ethers.ZeroHash;
+    } else if (roll < 0.11) {
       // 건당 한도를 크게 넘는 금액 -> PerTxLimitExceeded
       anomaly = 'pertx';
       amount = ethers.parseEther('0.01');
+    } else if (roll < 0.16) {
+      // 수취인은 허용됐지만 가맹점이 미등록 -> MerchantNotAllowed
+      // 정산 파트너 경로에서 "어디에 쓸지"가 통제된다는 것을 보여주는 케이스다.
+      anomaly = 'merchant';
+      merchantHash = ethers.id('casino-online');
+      m = { ...m, name: `${m.name} → 미등록 가맹점` };
     }
 
     // 메모는 온체인에 남으므로 어떤 계획에서 나온 결제인지 여기 새긴다.
@@ -145,12 +153,14 @@ async function main() {
 
     let entry;
     try {
-      const [ok, reason] = await vault.canSpend(PRINCIPAL, wallet.address, m.address, amount);
+      // 가맹점까지 넘겨 조회한다. 정산 파트너가 승인 전에 하는 것과 같은 호출이다.
+      const [ok, reason] = await vault.canSpendAt(
+        PRINCIPAL, wallet.address, m.address, amount, merchantHash);
       if (!ok) {
         console.log(`${ts()}  차단  ${m.name.padEnd(18)} ${fmt(amount)} ETH  <- ${reason}`);
         entry = { at: Date.now(), merchant: m.name, amount: fmt(amount), status: 'blocked', reason, planId: plan.id, planTitle: plan.title, rail, anomaly };
       } else {
-        const tx = await vault.spend(PRINCIPAL, m.address, amount, memo);
+        const tx = await vault.spendAt(PRINCIPAL, m.address, amount, memo, merchantHash);
         await tx.wait();
         console.log(`${ts()}  결제  ${m.name.padEnd(18)} ${fmt(amount)} ETH  ${tx.hash.slice(0, 14)}…`);
         entry = { at: Date.now(), merchant: m.name, amount: fmt(amount), status: 'paid', txHash: tx.hash, planId: plan.id, planTitle: plan.title, rail, anomaly };

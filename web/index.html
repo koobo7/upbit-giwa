@@ -161,6 +161,11 @@
       <button id="btnCreate">위임장 발급</button>
       <button class="ghost" id="btnDeposit">금고에 예치</button>
     </div>
+    <label style="display:flex;align-items:center;gap:8px;margin-top:12px;cursor:pointer">
+      <input type="checkbox" id="useMerchant" checked style="width:auto;margin:0" />
+      <span>가맹점 정책도 함께 적용 <span class="dim" style="font-weight:400">· 상점 단위로 통제</span></span>
+    </label>
+    <div class="dim" id="merchantHint" style="font-size:11px;margin-top:4px"></div>
     <div class="note">
       여기서 정한 규칙은 앱이 아니라 스마트 컨트랙트에 새겨집니다.
       에이전트가 탈취되거나 이 화면이 사라져도 한도는 그대로 강제됩니다.
@@ -216,13 +221,21 @@ const ABI = [
   "function remaining(address principal,address agent) view returns (uint256 today,uint256 total)",
   "function getDelegation(address principal,address agent) view returns (tuple(uint128 perTxLimit,uint128 dailyLimit,uint128 totalCap,uint128 totalSpent,uint128 spentToday,uint64 dayIndex,uint64 expiry,bool active,bool whitelistOnly))",
   "function canSpend(address principal,address agent,address recipient,uint256 amount) view returns (bool ok,string reason)",
-  "event Spent(bytes32 indexed id,address indexed agent,address indexed recipient,address principal,uint256 amount,string memo)",
+  "function canSpendAt(address principal,address agent,address recipient,uint256 amount,bytes32 merchant) view returns (bool ok,string reason)",
+  "function spendAt(address principal,address recipient,uint256 amount,string memo,bytes32 merchant)",
+  "function setMerchants(address agent,bytes32[] merchants,bool allowed)",
+  "function setMerchantPolicy(address agent,bool enabled)",
+  "function merchantPolicyOn(bytes32 id) view returns (bool)",
+  "function allowedMerchant(bytes32 id,bytes32 merchant) view returns (bool)",
+  "event Spent(bytes32 indexed id,address indexed agent,address indexed recipient,address principal,uint256 amount,string memo,bytes32 merchant)",
   "event DelegationRevoked(bytes32 indexed id,address indexed principal,address indexed agent,uint128 totalSpent)",
 ];
 
 let provider, signer, me, vault, VAULT_ADDR;
 // 감사 로그 조회 시작 블록. deployed.json에서 읽는다 (없으면 최근 범위로 폴백).
 let DEPLOY_BLOCK = null;
+// 가맹점 정책에 등록할 상점 목록 (demo-actors.json에서 로드).
+let DEMO_MERCHANTS = [];
 
 const $ = (id) => document.getElementById(id);
 const E = (v) => ethers.parseEther(String(v).trim() || "0");
@@ -427,17 +440,27 @@ function renderLog() {
   if (logPage > totalPages) logPage = totalPages;
   const shown = all.slice((logPage - 1) * logPageSize, logPage * logPageSize);
 
+  // 가맹점 해시를 사람이 읽을 수 있는 이름으로 되돌린다.
+  const merchantName = (hash) => {
+    if (!hash || hash === ethers.ZeroHash) return "";
+    const hit = DEMO_MERCHANTS.find(m => m.merchantId?.toLowerCase() === hash.toLowerCase());
+    return hit ? (hit.slug ?? hit.name) : hash.slice(0, 10) + "…";
+  };
+
   $("log").innerHTML = `<table>
-    <thead><tr><th>블록</th><th>수취인</th><th>금액</th><th>메모</th><th></th></tr></thead>
-    <tbody>${shown.map(l => `
+    <thead><tr><th>블록</th><th>수취인</th><th>가맹점</th><th>금액</th><th>메모</th><th></th></tr></thead>
+    <tbody>${shown.map(l => {
+      const mn = merchantName(l.args.merchant);
+      return `
       <tr>
         <td class="mono dim">#${l.blockNumber}</td>
         <td class="mono">${short(l.args.recipient)}</td>
+        <td class="mono">${mn || `<span class="dim">-</span>`}</td>
         <td>${F(l.args.amount)} ETH</td>
         <td class="dim">${l.args.memo || "-"}</td>
         <td class="mono"><a class="dim" target="_blank"
           href="${GIWA.explorer}/tx/${l.transactionHash}">보기</a></td>
-      </tr>`).join("")}</tbody></table>`;
+      </tr>`; }).join("")}</tbody></table>`;
 
   $("logPager").innerHTML = `
     <div class="row" style="align-items:center;margin-top:12px">
@@ -932,6 +955,14 @@ async function openAgentDialog() {
     a = await r.json();
   } catch { return; }
   if (!a?.agent?.address) return;
+  DEMO_MERCHANTS = a.merchants ?? [];
+  const hint = $("merchantHint");
+  if (hint) {
+    hint.innerHTML = DEMO_MERCHANTS.length
+      ? `쿠팡·넷플릭스 등 <b>${DEMO_MERCHANTS.length}곳</b>이 허용 상점으로 등록됩니다.
+         정산 파트너를 거치더라도 등록되지 않은 상점에서는 결제가 거절됩니다.`
+      : "";
+  }
 
   // 명령어는 실제 주소를 넣어 통째로 복사할 수 있게 한다.
   const cmd = (text) => `
@@ -1133,6 +1164,16 @@ $("btnCreate").onclick = async () => {
     expiry, recips.length > 0, recips
   );
   await tx.wait();
+
+  // 가맹점 정책까지 적용한다. 온체인 수취인(누가 받는가)과 별개로
+  // 어느 상점에서 쓸 수 있는지를 컨트랙트가 따로 강제한다.
+  if ($("useMerchant")?.checked && DEMO_MERCHANTS.length) {
+    const hashes = DEMO_MERCHANTS.map(m => m.merchantId).filter(Boolean);
+    if (hashes.length) {
+      await (await vault.setMerchants(agent, hashes, true)).wait();
+      await (await vault.setMerchantPolicy(agent, true)).wait();
+    }
+  }
   refresh();
 };
 

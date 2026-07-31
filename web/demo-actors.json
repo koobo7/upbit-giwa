@@ -14,35 +14,51 @@
   "merchants": [
     {
       "name": "넷플릭스 구독",
-      "address": "0x2d018745CC680A9b706d631B919AE77624C2f003"
+      "address": "0x2d018745CC680A9b706d631B919AE77624C2f003",
+      "slug": "netflix",
+      "merchantId": "0x2b02e9e36ad8822738cc68c20b80777dbae3c7091b912604df85be112cf6b7ca"
     },
     {
       "name": "OpenAI API 크레딧",
-      "address": "0x57097E508fE5c1a0705e3345861eFf069DFe7A3c"
+      "address": "0x57097E508fE5c1a0705e3345861eFf069DFe7A3c",
+      "slug": "openai",
+      "merchantId": "0x0bd66e3a815e15147ece75ce94f9de5d939900aeec0be5ed0b9f28440c11f76c"
     },
     {
       "name": "AWS 사용료",
-      "address": "0x3A54688Dd33247796E83872b49d7a24E8e344744"
+      "address": "0x3A54688Dd33247796E83872b49d7a24E8e344744",
+      "slug": "aws",
+      "merchantId": "0xe1a2ff87c4b67d1d0023e0ceb5ef00a5c25996eb7a9977165bb71ce4cf20083e"
     },
     {
       "name": "쿠팡 생필품",
-      "address": "0xF6B908FD9FAB218B783cE569e7dc76712479B7c2"
+      "address": "0xF6B908FD9FAB218B783cE569e7dc76712479B7c2",
+      "slug": "coupang",
+      "merchantId": "0x5fd0a5fb73869ecf7b1b045622bb75d9f5c11aed2ccf05c5ffa9ec8cfed345ee"
     },
     {
       "name": "스포티파이 구독",
-      "address": "0x1f5565E24F1d586Fa3776e10F7e272DC81B7808e"
+      "address": "0x1f5565E24F1d586Fa3776e10F7e272DC81B7808e",
+      "slug": "spotify",
+      "merchantId": "0xe77d3a28f46dc6403e889b539d60b92099a618759690f3fe7d8673612b3acc02"
     },
     {
       "name": "도메인 갱신",
-      "address": "0xdFD75b6a28D9BeD805296b7643AC8A66ACd7f03e"
+      "address": "0xdFD75b6a28D9BeD805296b7643AC8A66ACd7f03e",
+      "slug": "namecheap",
+      "merchantId": "0xbf4a8da7521ef45af433fe83cd912e365341c3cc62e5aef9a691ca5279d5c9e8"
     },
     {
       "name": "GitHub Copilot",
-      "address": "0x0b3a1be6657c3F1B6d7db15835E4bCb8F46282D2"
+      "address": "0x0b3a1be6657c3F1B6d7db15835E4bCb8F46282D2",
+      "slug": "github",
+      "merchantId": "0x07a17bd3c7c8d7b88e93a4d9007e3bc230b0a586a434de0bed6500e9f343deb7"
     },
     {
       "name": "배달 주문",
-      "address": "0x2736D6E545193dCe5AF6252Fe06BB7a53B214B66"
+      "address": "0x2736D6E545193dCe5AF6252Fe06BB7a53B214B66",
+      "slug": "baemin",
+      "merchantId": "0x9c9ed439a479996c039dc88e83341b577f9d64c89c0614a0070345e9b0e54973"
     }
   ]
 }
