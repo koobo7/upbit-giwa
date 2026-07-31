@@ -83,6 +83,26 @@
       "planId": "T-1",
       "planTitle": "구독 서비스 자동 갱신",
       "rail": "settled"
+    },
+    {
+      "at": 1785466094752,
+      "merchant": "쿠팡 생필품",
+      "amount": "0.00000111",
+      "status": "paid",
+      "txHash": "0xa7aa3dc2cc01650ce0e7d45b88706b6645d33981e143aef2c18bf1a12afb849f",
+      "planId": "T-3",
+      "planTitle": "생활용품 정기 주문",
+      "rail": "settled"
+    },
+    {
+      "at": 1785466144076,
+      "merchant": "배달 주문",
+      "amount": "0.00000166",
+      "status": "paid",
+      "txHash": "0x7f6d16fe6248583cb59efa9b3f6d6cc265bd1aa44c3ede209b1995d4781cfaf6",
+      "planId": "T-3",
+      "planTitle": "생활용품 정기 주문",
+      "rail": "settled"
     }
   ],
   "running": true,
@@ -90,9 +110,9 @@
   "principal": "0x538F0C6c18014D3C31af08f0e25D8404D893A66F",
   "contract": "0x44a3E444494D147b4c64b89aBFb1279c3cC4171e",
   "intervalSec": 45,
-  "remainingToday": "0.00001475",
-  "remainingTotal": "0.00019475",
-  "updatedAt": "2026-07-31T02:47:25.442Z",
+  "remainingToday": "0.00001198",
+  "remainingTotal": "0.00019198",
+  "updatedAt": "2026-07-31T02:49:04.110Z",
   "plan": [
     {
       "id": "T-1",
