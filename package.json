@@ -7,7 +7,9 @@
     "test": "node compile.js && node test.js",
     "demo": "node compile.js && node script/demo.js",
     "deploy": "node compile.js && node script/deploy.js",
-    "web": "node script/serve.js"
+    "web": "node script/serve.js",
+    "agent": "node script/daemon.js",
+    "publish": "node script/publish.js"
   },
   "keywords": ["giwa", "ai-agent", "delegation", "payments"],
   "license": "MIT",
