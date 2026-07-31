@@ -260,6 +260,10 @@ async function loadAddress() {
    브레이브는 자체 지갑이 내장돼 있고, 메타마스크와 함께 설치되면
    window.ethereum.providers 배열로 들어온다. 특정 지갑을 요구하지 않는다. */
 function pickWallet() {
+  // EIP-6963으로 알린 지갑이 있으면 그것을 우선한다. 여러 개면 첫 번째.
+  // (선택 UI는 MVP 범위 밖이라 두지 않았다 — 필요해지면 여기서 고르게 하면 된다)
+  if (EIP6963.size) return EIP6963.keys().next().value;
+
   const eth = window.ethereum;
   if (!eth) return null;
   if (Array.isArray(eth.providers) && eth.providers.length) {
@@ -271,13 +275,32 @@ function pickWallet() {
   return eth;
 }
 
+/* EIP-6963으로 자기를 알린 지갑들. 지갑이 이름·아이콘을 직접 제공하므로
+   앱이 목록을 들고 있을 필요가 없다. 미지원 지갑은 아래 플래그로 폴백한다. */
+const EIP6963 = new Map();   // provider -> { name, icon }
+window.addEventListener("eip6963:announceProvider", (ev) => {
+  const { info, provider } = ev.detail || {};
+  if (info?.name && provider) EIP6963.set(provider, { name: info.name, icon: info.icon });
+});
+window.dispatchEvent(new Event("eip6963:requestProvider"));
+
 function walletName(p) {
   if (!p) return "지갑";
-  // 브레이브·코인베이스 등은 호환성 때문에 isMetaMask도 true로 켠다.
-  // 따라서 고유 플래그를 먼저 확인해야 이름이 뒤바뀌지 않는다.
+  // 1순위: 지갑이 스스로 알린 이름 (Rainbow, Trust, Phantom, OKX … 모두 여기서 처리된다)
+  const announced = EIP6963.get(p);
+  if (announced) return announced.name;
+
+  // 폴백: 레거시 플래그. 브레이브·코인베이스 등은 호환성 때문에 isMetaMask도
+  // 함께 켜므로, 고유 플래그를 먼저 확인해야 이름이 뒤바뀌지 않는다.
   if (p.isBraveWallet) return "브레이브 지갑";
   if (p.isCoinbaseWallet) return "코인베이스 지갑";
   if (p.isRabby) return "Rabby";
+  if (p.isTrust || p.isTrustWallet) return "Trust Wallet";
+  if (p.isPhantom) return "Phantom";
+  if (p.isOkxWallet || p.isOKExWallet) return "OKX Wallet";
+  if (p.isZerion) return "Zerion";
+  if (p.isFrame) return "Frame";
+  if (p.isTokenPocket) return "TokenPocket";
   if (p.isMetaMask) return "메타마스크";
   return "지갑";
 }
@@ -667,9 +690,10 @@ async function openAgentDialog() {
     const all = a.events.slice().reverse();
     const totalPages = Math.max(1, Math.ceil(all.length / pageSize));
     if (page > totalPages) page = totalPages;
+    const COLLAPSED = 5;   // 접힌 상태에서 보여줄 최신 건수
     const shown = expanded
       ? all.slice((page - 1) * pageSize, page * pageSize)
-      : all.slice(0, 12);
+      : all.slice(0, COLLAPSED);
 
     const rows = shown.map(e => `
       <tr>
@@ -731,9 +755,9 @@ async function openAgentDialog() {
                 `<option value="${n}" ${n === pageSize ? "selected" : ""}>${n}</option>`).join("")}
             </select>
           </label>
-        </div>` : (all.length > 12 ? `
+        </div>` : (all.length > COLLAPSED ? `
         <div class="dim" style="font-size:11px;margin-top:10px">
-          최근 12건만 표시 중 · 전체 ${all.length}건은 <b>전체보기</b>에서 확인하세요.</div>` : "")}
+          최근 ${COLLAPSED}건만 표시 중 · 전체 ${all.length}건은 <b>전체보기</b>에서 확인하세요.</div>` : "")}
       <div class="note">
         <b>경로</b> — <span style="color:var(--accent)">온체인</span>은 수취인이 직접 정산하는 경우이고,
         <span style="color:var(--blue)">정산</span>은 쿠팡·넷플릭스처럼 암호화폐를 받지 않는 곳입니다.

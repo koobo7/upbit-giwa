@@ -73,6 +73,16 @@
       "planId": "T-2",
       "planTitle": "개발 인프라 사용료 정산",
       "rail": "onchain"
+    },
+    {
+      "at": 1785466045410,
+      "merchant": "GitHub Copilot",
+      "amount": "0.00000116",
+      "status": "paid",
+      "txHash": "0x59b8a38381d6bf23549ea482e323ba0e6684d54f86a9ac3fb190687630648fc0",
+      "planId": "T-1",
+      "planTitle": "구독 서비스 자동 갱신",
+      "rail": "settled"
     }
   ],
   "running": true,
@@ -80,9 +90,9 @@
   "principal": "0x538F0C6c18014D3C31af08f0e25D8404D893A66F",
   "contract": "0x44a3E444494D147b4c64b89aBFb1279c3cC4171e",
   "intervalSec": 45,
-  "remainingToday": "0.00001591",
-  "remainingTotal": "0.00019591",
-  "updatedAt": "2026-07-31T02:46:36.104Z",
+  "remainingToday": "0.00001475",
+  "remainingTotal": "0.00019475",
+  "updatedAt": "2026-07-31T02:47:25.442Z",
   "plan": [
     {
       "id": "T-1",
