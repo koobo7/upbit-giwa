@@ -31,7 +31,12 @@ const { spawn } = require('child_process');
 let daemon = null;
 
 function daemonStatus() {
-  return { running: !!daemon && !daemon.killed, pid: daemon?.pid ?? null };
+  // 개인키(demo-wallets.json)와 빌드 산출물이 없으면 데몬은 뜨자마자 죽는다.
+  // 심사용 서버가 그런 상태이므로, 시작 가능 여부를 미리 알려 헛클릭을 막는다.
+  const ROOT_DIR = path.join(__dirname, '..');
+  const ready = fs.existsSync(path.join(ROOT_DIR, 'demo-wallets.json'))
+             && fs.existsSync(path.join(ROOT_DIR, 'build', 'DelegationVault.json'));
+  return { running: !!daemon && !daemon.killed, pid: daemon?.pid ?? null, ready };
 }
 
 function startDaemon() {

@@ -864,6 +864,7 @@ async function openAgentDialog() {
   const btn = $("btnDaemon");
   let ctlAvailable = false;
   let ctlRunning = false;
+  let ctlReady = true;   // 이 서버에서 데몬을 띄울 수 있는가 (개인키·빌드 존재)
 
   // 전체보기 상태. 접힌 상태에서는 최근 12건만 보여준다.
   let expanded = localStorage.getItem("ingam.liveAll") === "1";
@@ -883,6 +884,14 @@ async function openAgentDialog() {
   const paint = (running) => {
     ctlRunning = running;
     btn.textContent = running ? "■" : "▶";
+    if (!ctlReady && !running) {
+      // 이 서버에는 개인키가 없어 데몬을 띄울 수 없다. 눌러도 소용없으므로 비활성화한다.
+      btn.disabled = true;
+      btn.style.color = "var(--dim)";
+      btn.title = "이 서버에서는 시작할 수 없습니다 (에이전트는 개인키가 있는 로컬에서 실행됩니다)";
+      return;
+    }
+    btn.disabled = false;
     btn.title = running ? "정지" : "시작";
     btn.style.color = running ? "var(--danger)" : "var(--accent)";
   };
@@ -894,18 +903,17 @@ async function openAgentDialog() {
   }
 
   (async function initCtl() {
-    // 에이전트는 개인키가 있는 로컬에서만 돌린다. 원격(심사용) 서버에는 키가 없어
-    // 시작해도 즉시 죽으므로, 로컬에서 열었을 때만 제어 버튼을 노출한다.
-    const isLocal = ["localhost", "127.0.0.1", "[::1]"].includes(location.hostname);
-    if (!isLocal) { btn.style.display = "none"; return; }
+    // 제어 API가 응답하면 버튼을 띄운다. 실패 시 알림은 팝업이 아니라 인라인이라
+    // 원격에서 눌러도 방문자를 방해하지 않는다.
     try {
       const s = await ctl("status");
       ctlAvailable = true;
+      ctlReady = s.ready !== false;
       btn.style.display = "";
       $("liveCard").style.display = "";   // 제어 가능하면 기록이 없어도 카드를 띄운다
       paint(s.running);
     } catch {
-      btn.style.display = "none";
+      btn.style.display = "none";   // API 자체가 없는 정적 호스팅
     }
   })();
 
