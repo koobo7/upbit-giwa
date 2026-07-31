@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>INGAM 기술 문서 — 위임 결제 레이어 아키텍처</title>
+<meta name="description" content="DelegationVault의 상태 모델, 판정 로직, 보안 설계 결정, 정산 아키텍처.">
+<link rel="icon" href="seal.svg">
+<style>
+  *{ margin:0; padding:0; box-sizing:border-box; }
+
+  :root{
+    --inju:#C8382F; --ok:#3F7D58; --deny:#B0453C;
+    --bg:#EDE7DC; --fg:#141210; --muted:#6E655C;
+    --rule:#CFC5B6; --panel:#E4DCCE; --panel-2:#DAD0BF;
+    --display:"Nanum Myeongjo","Apple SD Gothic Neo","Batang",serif;
+    --body:"Pretendard",-apple-system,"Malgun Gothic","Apple SD Gothic Neo",sans-serif;
+    --mono:"JetBrains Mono","D2Coding",ui-monospace,"Consolas",monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{ --bg:#141210; --fg:#EDE7DC; --muted:#9A9088;
+           --rule:#2E2A26; --panel:#1D1A17; --panel-2:#262220; --inju:#E0574C; }
+  }
+  :root[data-theme="dark"]{ --bg:#141210; --fg:#EDE7DC; --muted:#9A9088;
+    --rule:#2E2A26; --panel:#1D1A17; --panel-2:#262220; --inju:#E0574C; }
+  :root[data-theme="light"]{ --bg:#EDE7DC; --fg:#141210; --muted:#6E655C;
+    --rule:#CFC5B6; --panel:#E4DCCE; --panel-2:#DAD0BF; --inju:#C8382F; }
+
+  body{ background:var(--bg); color:var(--fg); font-family:var(--body);
+        line-height:1.75; -webkit-font-smoothing:antialiased; }
+
+  .wrap{ max-width:76rem; margin:0 auto; padding:clamp(2rem,5vw,4.5rem) clamp(1.2rem,4vw,3rem); }
+
+  header.doc{ border-bottom:3px solid var(--inju); padding-bottom:1.6rem; margin-bottom:2.4rem;
+              display:flex; gap:1.5rem; align-items:flex-start; flex-wrap:wrap; }
+  header.doc img{ width:64px; height:64px; flex:0 0 auto; }
+  .htext{ flex:1 1 18rem; display:flex; flex-direction:column; gap:.4rem; }
+  .eyebrow{ font-size:.76rem; letter-spacing:.22em; text-transform:uppercase;
+            color:var(--inju); font-weight:700; }
+  h1{ font-family:var(--display); font-size:clamp(1.8rem,4vw,2.9rem);
+      line-height:1.2; text-wrap:balance; }
+  .sub{ color:var(--muted); font-size:.95rem; }
+
+  nav.toc{ background:var(--panel); border:1px solid var(--rule);
+           padding:1.1rem 1.3rem; margin-bottom:3rem;
+           display:grid; gap:.35rem 1.4rem;
+           grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); }
+  nav.toc a{ color:var(--fg); text-decoration:none; font-size:.9rem;
+             display:flex; gap:.6rem; padding:.15rem 0; }
+  nav.toc a:hover{ color:var(--inju); }
+  nav.toc .i{ font-family:var(--mono); color:var(--inju); font-size:.8rem;
+              font-variant-numeric:tabular-nums; }
+
+  section{ margin-bottom:3.4rem; scroll-margin-top:1.5rem; }
+  h2{ font-family:var(--display); font-size:clamp(1.35rem,2.6vw,1.9rem);
+      line-height:1.3; text-wrap:balance; margin-bottom:.9rem;
+      padding-bottom:.5rem; border-bottom:1px solid var(--rule);
+      display:flex; align-items:baseline; gap:.75rem; }
+  h2 .i{ font-family:var(--mono); font-size:.68em; color:var(--inju); }
+  h3{ font-family:var(--display); font-size:1.12rem; margin:1.6rem 0 .5rem; }
+  p{ margin-bottom:.85rem; max-width:68ch; }
+  p:last-child{ margin-bottom:0; }
+  strong{ color:var(--inju); font-weight:700; }
+  code{ font-family:var(--mono); font-size:.87em;
+        background:var(--panel-2); padding:.1em .38em; }
+  a{ color:var(--inju); text-underline-offset:.22em; }
+  a:focus-visible{ outline:2px solid var(--inju); outline-offset:3px; }
+  ul{ margin:0 0 .9rem 1.1rem; }
+  li{ margin-bottom:.3rem; max-width:66ch; }
+
+  .scroll-x{ overflow-x:auto; margin-bottom:1rem; }
+  table{ border-collapse:collapse; width:100%; min-width:34rem; font-size:.9rem; }
+  th,td{ text-align:left; padding:.6rem .8rem; border-bottom:1px solid var(--rule);
+         vertical-align:top; }
+  th{ font-family:var(--mono); font-size:.74rem; letter-spacing:.1em;
+      text-transform:uppercase; color:var(--muted); border-bottom-color:var(--fg); }
+  td code{ background:none; padding:0; color:var(--muted); }
+  tbody tr:hover{ background:var(--panel); }
+
+  .note{ background:var(--panel); border-left:3px solid var(--inju);
+         padding:1rem 1.2rem; margin:1.2rem 0; }
+  .note p{ margin-bottom:.5rem; }
+  .note p:last-child{ margin-bottom:0; }
+
+  pre{ background:var(--panel); border:1px solid var(--rule);
+       padding:1rem 1.15rem; overflow-x:auto; margin-bottom:1rem;
+       font-family:var(--mono); font-size:.83rem; line-height:1.6; }
+
+  .pill{ display:inline-block; font-family:var(--mono); font-size:.72rem;
+         letter-spacing:.06em; padding:.12em .55em; border:1px solid currentColor; }
+  .pill.done{ color:var(--ok); }
+  .pill.plan{ color:var(--muted); }
+
+  footer{ border-top:1px solid var(--rule); padding-top:1.5rem; margin-top:1rem;
+          color:var(--muted); font-size:.86rem;
+          display:flex; gap:1.5rem; flex-wrap:wrap; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <img src="seal.svg" alt="">
+  <div class="htext">
+    <span class="eyebrow">기술 문서 · Technical Overview</span>
+    <h1>INGAM 위임 결제 레이어</h1>
+    <p class="sub">AI 에이전트에게 지갑을 맡기되, 한도는 컨트랙트가 지킨다.<br>
+      GIWA Sepolia · <code>0xfFFffF47dD6944c4d01d2cb4CF00ed83a90788fd</code> · Verified</p>
+  </div>
+</header>
+
+<nav class="toc">
+  <a href="#s1"><span class="i">01</span>시스템 개요</a>
+  <a href="#s2"><span class="i">02</span>상태 모델</a>
+  <a href="#s3"><span class="i">03</span>판정 로직</a>
+  <a href="#s4"><span class="i">04</span>보안 설계 결정</a>
+  <a href="#s5"><span class="i">05</span>정산 아키텍처</a>
+  <a href="#s6"><span class="i">06</span>왜 GIWA인가</a>
+  <a href="#s7"><span class="i">07</span>테스트 전략</a>
+  <a href="#s8"><span class="i">08</span>범위와 로드맵</a>
+</nav>
+
+<section id="s1">
+  <h2><span class="i">01</span>시스템 개요</h2>
+  <p>INGAM은 <strong>결제 수단이 아니라 권한 계층</strong>이다. 기존 구조에서 "이 주체가 얼마까지, 어디에, 언제까지 쓸 수 있는가"를 결정하는 규칙은 카드사 서버나 애플리케이션 코드 안에 있다. INGAM은 그 규칙을 체인으로 옮긴다.</p>
+  <p>핵심 전제는 하나다. <strong>에이전트는 금고의 키를 갖지 않는다.</strong> 에이전트가 가진 것은 자기 지갑뿐이고, 그 지갑으로 할 수 있는 일은 금고에 결제를 <em>요청</em>하는 것이다. 승인 여부는 전적으로 컨트랙트가 판정한다.</p>
+
+  <h3>구성 요소</h3>
+  <div class="scroll-x">
+  <table>
+    <thead><tr><th>구성 요소</th><th>역할</th><th>위치</th></tr></thead>
+    <tbody>
+      <tr><td><code>DelegationVault.sol</code></td><td>예치·위임·한도 판정·감사 로그. 460 LOC</td><td>온체인</td></tr>
+      <tr><td><code>script/daemon.js</code></td><td>자율 결제 에이전트. 여러 지갑을 번갈아 운용</td><td>오프체인</td></tr>
+      <tr><td><code>script/agent.js</code></td><td>단건 결제·조회 CLI</td><td>오프체인</td></tr>
+      <tr><td><code>web/index.html</code></td><td>위임 발급·실시간 한도·즉시 회수·감사 로그</td><td>브라우저</td></tr>
+      <tr><td>정산 파트너</td><td><code>canSpend()</code> 조회 후 법정통화 대납</td><td>오프체인 <span class="pill plan">Phase 1</span></td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>신뢰 경계</h3>
+  <pre>위임자(principal)  ── 예치·위임 발급·즉시 회수 ──▶  DelegationVault
+                                                        │
+에이전트(agent)    ── spend() 요청 ──────────────────▶  │ 판정
+                                                        │
+                     ◀── 송금 또는 커스텀 에러 ─────────┘</pre>
+  <p>에이전트가 탈취되어도 컨트랙트가 정한 한도 밖으로는 나갈 수 없다. 위임자는 언제든 <code>revoke()</code> 한 번으로 권한을 소멸시킬 수 있고, 위임이 살아 있는 동안에도 <code>withdraw()</code>로 자금을 회수할 우선권을 갖는다.</p>
+</section>
+
+<section id="s2">
+  <h2><span class="i">02</span>상태 모델</h2>
+  <p>위임은 <code>principal → agent</code> 쌍 하나당 하나씩 존재하며, 단일 구조체로 관리된다.</p>
+  <pre>struct Delegation {
+    uint128 perTxLimit;    // 1회 결제 한도
+    uint128 dailyLimit;    // 1일 누적 한도
+    uint128 totalCap;      // 위임 전체 기간 총 한도
+    uint128 totalSpent;    // 누적 사용액
+    uint128 spentToday;    // 오늘 사용액 (dayIndex 기준)
+    uint64  dayIndex;      // spentToday가 속한 날짜 (timestamp / 1 days)
+    uint64  expiry;        // 만료 시각. 이후 자동 무효
+    bool    active;        // 회수되면 false
+    bool    whitelistOnly; // true면 허용된 수취인에게만 결제 가능
+}</pre>
+
+  <h3>두 개의 허용 층</h3>
+  <p>수취인과 가맹점은 <strong>별개의 층</strong>이다. 이 분리가 정산 파트너 경로에서 결정적으로 중요하다.</p>
+  <div class="scroll-x">
+  <table>
+    <thead><tr><th>층</th><th>키</th><th>의미</th></tr></thead>
+    <tbody>
+      <tr><td><code>allowedRecipient</code></td><td>delegationId → address</td><td>온체인에서 실제로 자금을 받는 주소. 정산 경로에서는 파트너 주소가 된다</td></tr>
+      <tr><td><code>allowedMerchant</code></td><td>delegationId → bytes32</td><td>쿠팡·넷플릭스처럼 체인 밖에 있는 상점의 식별자 해시</td></tr>
+      <tr><td><code>merchantPolicyOn</code></td><td>delegationId → bool</td><td>가맹점 검사 사용 여부</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <div class="note">
+    <p><strong>왜 두 층인가.</strong> 정산 파트너를 쓰면 온체인 수취인은 파트너 한 곳으로 고정된다. 수취인 화이트리스트만 있으면 "파트너에게 보내는 것"만 통제될 뿐 <em>어느 상점에 쓰는지</em>는 전혀 통제되지 않는다.</p>
+    <p>그래서 가맹점 단위 허용을 컨트랙트가 따로 강제한다. 해시는 <code>keccak256(bytes(식별자))</code>이며 <code>merchantId()</code>로 계산한다.</p>
+  </div>
+
+  <h3>회차(nonce) 설계</h3>
+  <p>위임 ID는 <code>principal · agent · nonce</code>로부터 파생된다. 위임을 재발급하면 <code>delegationNonce</code>가 증가하며 ID 자체가 바뀐다.</p>
+  <pre>delegationId = _idFor(principal, agent, delegationNonce[principal][agent])</pre>
+  <p>화이트리스트는 delegationId를 키로 저장되므로, <strong>재발급 시 예전 허용 목록이 자동으로 무효화된다.</strong> 목록을 일일이 지우는 반복문이 없고, 지우다 만 상태도 존재할 수 없다.</p>
+</section>
+
+<section id="s3">
+  <h2><span class="i">03</span>판정 로직</h2>
+  <p>결제 경로는 <code>spend()</code> 하나이고, 사전 조회용으로 상태를 바꾸지 않는 <code>canSpend()</code>가 대칭으로 존재한다.</p>
+
+  <h3>검사 순서</h3>
+  <pre>spend(principal, recipient, amount, memo)
+  │
+  ├─ 위임 존재?           → NoDelegation
+  ├─ active?              → DelegationInactive
+  ├─ expiry 이전?         → DelegationExpired(expiry, now)
+  ├─ recipient ≠ 금고?    → SelfRecipient
+  ├─ whitelistOnly?       → RecipientNotAllowed(recipient)
+  ├─ merchantPolicyOn?    → MerchantNotAllowed(merchant)
+  ├─ _applyLimits()       → PerTxLimit / DailyLimit / TotalCap
+  ├─ 잔액 충분?           → InsufficientBalance(available, requested)
+  │
+  ├─ 상태 갱신 (Effects)
+  └─ 송금 (Interactions)  → TransferFailed</pre>
+
+  <h3>한도 적용</h3>
+  <p>세 한도의 성격이 다르다. 건당은 매번 초기화되고, 일일은 날짜가 바뀌면 자동 회복되며, 총 한도는 회복되지 않는다.</p>
+  <pre>uint64 today = uint64(block.timestamp / 1 days);
+uint128 spentToday = d.dayIndex == today ? d.spentToday : 0;</pre>
+  <p>일일 사용액은 <strong>별도의 리셋 트랜잭션 없이</strong> 회복된다. <code>dayIndex</code>가 오늘과 다르면 <code>spentToday</code>를 0으로 간주하는 방식이라, 아무도 관리하지 않아도 날짜가 바뀌는 순간 한도가 돌아온다. 만료 역시 같은 원리로 <em>아무 조치 없이</em> 자동 무효가 된다.</p>
+
+  <h3>커스텀 에러 — 왜 막혔는지가 돌아온다</h3>
+  <p>거절 사유를 문자열이 아니라 타입과 숫자로 반환한다. 얼마가 남았는지가 함께 오므로 에이전트가 재시도 금액을 스스로 계산할 수 있다.</p>
+  <div class="scroll-x">
+  <table>
+    <thead><tr><th>에러</th><th>반환값</th><th>의미</th></tr></thead>
+    <tbody>
+      <tr><td><code>PerTxLimitExceeded</code></td><td>limit, requested</td><td>건당 한도 초과</td></tr>
+      <tr><td><code>DailyLimitExceeded</code></td><td>remaining, requested</td><td>오늘 남은 한도 부족</td></tr>
+      <tr><td><code>TotalCapExceeded</code></td><td>remaining, requested</td><td>총 한도 소진</td></tr>
+      <tr><td><code>RecipientNotAllowed</code></td><td>recipient</td><td>화이트리스트 밖 수취인</td></tr>
+      <tr><td><code>MerchantNotAllowed</code></td><td>merchant</td><td>허용되지 않은 가맹점</td></tr>
+      <tr><td><code>DelegationExpired</code></td><td>expiry, nowTs</td><td>만료됨</td></tr>
+      <tr><td><code>DelegationInactive</code></td><td>—</td><td>회수됨</td></tr>
+      <tr><td><code>SelfRecipient</code></td><td>—</td><td>금고 자신에게 송금 시도</td></tr>
+      <tr><td><code>InsufficientBalance</code></td><td>available, requested</td><td>위임자 예치 잔액 부족</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>전체 17개 커스텀 에러가 정의돼 있다. <code>canSpend()</code>는 같은 판정을 거쳐 <strong>가부와 사유를 함께 반환하는 view 함수</strong>다. 대시보드는 이것으로 버튼 활성화 여부를 정하고, 정산 파트너는 승인 판단에 쓴다.</p>
+</section>
+
+<section id="s4">
+  <h2><span class="i">04</span>보안 설계 결정</h2>
+
+  <h3>재진입 방어와 CEI</h3>
+  <p><code>nonReentrant</code> 가드를 두고, 그와 별개로 <strong>Checks-Effects-Interactions</strong> 순서를 지킨다. 한도 차감과 잔액 갱신이 모두 끝난 뒤에 외부 송금이 일어나므로, 송금 콜백이 다시 들어와도 이미 소진된 한도를 마주한다.</p>
+
+  <h3>위임자 출금 우선권</h3>
+  <p>위임이 활성 상태여도 위임자는 <code>withdraw()</code>로 언제든 자금을 뺄 수 있다. 위임은 <em>지출 권한</em>이지 <em>자금에 대한 권리</em>가 아니다. 에이전트가 이상 행동을 보일 때 회수를 기다릴 필요 없이 잔액 자체를 비울 수 있다.</p>
+
+  <h3>금고 자기송금 차단</h3>
+  <p>수취인을 금고 주소로 지정하면 <code>SelfRecipient</code>로 거절한다. 이를 허용하면 한도는 차감되는데 자금은 금고에 남아, <strong>회수 불가능한 상태로 한도만 소각</strong>되는 경로가 생긴다.</p>
+
+  <h3>정수 폭 선택</h3>
+  <p>금액 필드는 <code>uint128</code>이다. 구조체가 슬롯에 조밀하게 들어가 가스가 줄고, <code>uint256</code> 입력은 <code>AmountTooLarge</code>로 경계에서 막는다. 한도 차감은 뺄셈 결과를 먼저 검사한 뒤 <code>unchecked</code>로 수행해 불필요한 오버플로 검사를 피한다.</p>
+
+  <h3>EVM 버전 고정</h3>
+  <div class="note">
+    <p>solc 0.8.26의 기본 타깃은 <code>cancun</code>이고, <code>string memory</code> 반환에 <code>MCOPY</code>(0x5e)를 emit한다. 로컬 테스트에 쓰는 ganache 7.x는 이 옵코드를 구현하지 않아 <code>canSpend()</code>가 invalid opcode로 죽는다.</p>
+    <p><code>evmVersion: 'shanghai'</code>로 고정해 <strong>로컬 테스트와 OP Stack L2에서 동일한 바이트코드가 돌도록</strong> 했다. 검증된 컨트랙트의 컴파일 설정도 이와 같다.</p>
+  </div>
+</section>
+
+<section id="s5">
+  <h2><span class="i">05</span>정산 아키텍처</h2>
+  <p>쿠팡은 ETH를 받지 않는다. 넷플릭스도, 대부분의 상점도 마찬가지다. 결제 수단을 바꾸려는 시도는 실패한다 — 가맹점을 설득하는 데 수십 년이 걸리기 때문이다.</p>
+  <p>INGAM은 결제 수단을 건드리지 않는다. <strong>권한 계층만 체인으로 옮기고, 결제 자체는 원화로 나가도 된다.</strong></p>
+
+  <h3>세 가지 경로</h3>
+  <div class="scroll-x">
+  <table>
+    <thead><tr><th>경로</th><th>대상</th><th>상태</th></tr></thead>
+    <tbody>
+      <tr><td>온체인 직접 정산</td><td>수취인이 암호화폐를 직접 받는 경우. API 크레딧, 클라우드</td><td><span class="pill done">동작 중</span></td></tr>
+      <tr><td>정산 파트너 경유</td><td>원화만 받는 곳. 쿠팡, 넷플릭스</td><td><span class="pill plan">Phase 1</span></td></tr>
+      <tr><td>선불 크레딧 브리지</td><td>상품권·포인트 전환. 보조 수단</td><td><span class="pill plan">보류</span></td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>파트너 경유 흐름</h3>
+  <pre>에이전트가 쿠팡에서 결제 시도
+        ↓
+카드 승인 요청이 정산 파트너(PG·카드사)에게 도달
+        ↓
+파트너가 canSpend(위임자, 에이전트, 가맹점, 금액) 조회
+        ↓
+  true  → 파트너가 원화로 대납. 쿠팡은 정상 결제 완료
+  false → 승인 거절. 사유(PER_TX_LIMIT 등)가 그대로 반환
+        ↓
+파트너가 정산 주기에 맞춰 금고에서 회수</pre>
+  <p><strong>쿠팡은 아무것도 몰라도 된다.</strong> 평소처럼 카드 결제를 받을 뿐이다. 에이전트도 특별한 일을 하지 않는다. 그런데 한도는 온체인에서 강제된다.</p>
+  <div class="note">
+    <p><code>canSpend()</code>는 처음부터 이 용도로 설계됐다. 상태를 바꾸지 않는 view 함수라 파트너가 승인 판단에 쓰기 적합하고, 거절 사유를 함께 돌려준다. <strong>파트너 연동에 필요한 인터페이스는 이미 배포돼 있다.</strong></p>
+  </div>
+  <p>선불 크레딧 브리지는 구현이 가장 쉽지만 잔액이 체인 밖에 머무는 구간이 생겨 회수의 즉시성이 약해진다. 파트너 확보 전의 임시 수단으로만 본다.</p>
+</section>
+
+<section id="s6">
+  <h2><span class="i">06</span>왜 GIWA인가</h2>
+  <p>정산 파트너는 규제 대상이다. 누구에게 대납하는지 모르면 사업을 할 수 없다. <strong>익명 지갑이 익명 지갑에 권한을 넘기는 구조는 어떤 PG도 받지 않는다.</strong></p>
+  <p>도장(Dojang)이 이 문제를 푼다는 것이 INGAM의 핵심 주장이다. KYC 라이선스 기관이 발급한 온체인 검증이 위임의 뿌리에 있으면, 파트너는 "실명 확인된 위임자가 이 한도를 승인했다"를 체인에서 직접 확인한다. 별도 계약서도 심사도 필요 없다.</p>
+  <div class="scroll-x">
+  <table>
+    <thead><tr><th>GIWA 구성 요소</th><th>INGAM에서의 역할</th></tr></thead>
+    <tbody>
+      <tr><td>도장(Dojang)</td><td>위임 뿌리의 KYC 검증. 파트너 연동의 전제</td></tr>
+      <tr><td>업비트 온램프</td><td>금고 충전 경로</td></tr>
+      <tr><td>L2 수수료 구조</td><td>소액·고빈도 정산을 경제적으로 성립시킴</td></tr>
+      <tr><td>기와 월렛</td><td>즉시 회수 버튼이 놓일 자리</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>네 가지가 동시에 필요하다. 하나라도 빠지면 정산 파트너 경로가 성립하지 않는다.</p>
+</section>
+
+<section id="s7">
+  <h2><span class="i">07</span>테스트 전략</h2>
+  <p>34개 규칙 검증이 <code>npm test</code> 하나로 돌아간다. 설치 없이 로컬 체인에서 전체 시나리오가 재생된다.</p>
+  <p>테스트의 중심은 "성공하는 경우"가 아니라 <strong>차단되어야 하는 경우를 각각 어떤 에러로 막는지</strong>다. 단순히 revert 여부만 보지 않고 에러 타입까지 단언한다.</p>
+  <div class="scroll-x">
+  <table>
+    <thead><tr><th>분류</th><th>검증 내용</th></tr></thead>
+    <tbody>
+      <tr><td>한도</td><td>건당 초과, 일일 소진 후 차단, 날짜 변경 시 자동 회복, 총 한도 소진</td></tr>
+      <tr><td>수취인</td><td>화이트리스트 밖 송금 차단, 금고 자기송금 차단</td></tr>
+      <tr><td>가맹점</td><td>정책 활성화, 허용 가맹점 통과, 미지정 가맹점 차단</td></tr>
+      <tr><td>생명주기</td><td>만료 후 결제 차단, 회수 후 결제 차단, 재발급 시 새 ID 발급</td></tr>
+      <tr><td>재발급 무효화</td><td>재발급 후 예전 허용처로 결제 시도가 차단되는지</td></tr>
+      <tr><td>권한</td><td>위임받지 않은 주소의 결제 시도 차단</td></tr>
+      <tr><td>자금</td><td>0원 예치 거절, 잔액 없는 출금 거절, 전액 출금</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <pre>npm install
+npm run build   # 컨트랙트 컴파일
+npm test        # 34개 규칙 테스트
+npm run demo    # 로컬 체인에서 전체 시나리오 재생</pre>
+</section>
+
+<section id="s8">
+  <h2><span class="i">08</span>범위와 로드맵</h2>
+  <p>현재 MVP는 <strong>네이티브 코인 결제만</strong> 지원한다. 이 범위를 의도적으로 좁게 잡았다 — 권한 계층이 실제로 뚫리지 않는다는 것을 먼저 증명해야 나머지가 의미를 갖기 때문이다.</p>
+  <div class="scroll-x">
+  <table>
+    <thead><tr><th>단계</th><th>내용</th><th>상태</th></tr></thead>
+    <tbody>
+      <tr><td>온체인 직접 정산</td><td><code>spend()</code> · 3중 한도 · 수취인/가맹점 화이트리스트</td><td><span class="pill done">완료</span></td></tr>
+      <tr><td>파트너 조회 인터페이스</td><td><code>canSpend()</code> view 함수</td><td><span class="pill done">완료</span></td></tr>
+      <tr><td>결제 경로 구분 표시</td><td>대시보드에 온체인/정산 표기</td><td><span class="pill done">완료</span></td></tr>
+      <tr><td>ERC20 결제</td><td>스테이블코인 지원</td><td><span class="pill plan">Phase 1</span></td></tr>
+      <tr><td>파트너 정산 컨트랙트</td><td>대납분 회수, 정산 주기 관리</td><td><span class="pill plan">Phase 1</span></td></tr>
+      <tr><td>도장 연동</td><td>위임 발급 조건에 KYC 검증 추가</td><td><span class="pill plan">Phase 3</span></td></tr>
+      <tr><td>PG 파일럿</td><td>정산 파트너 1곳과 실거래 검증</td><td><span class="pill plan">Phase 3</span></td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<footer>
+  <a href="https://upbit-giwa.metabox.pro">라이브 대시보드</a>
+  <a href="deck.html">피치덱</a>
+  <a href="https://github.com/koobo7/upbit-giwa">GitHub</a>
+  <a href="https://sepolia-explorer.giwa.io/address/0xfFFffF47dD6944c4d01d2cb4CF00ed83a90788fd?tab=contract">검증된 컨트랙트</a>
+  <span>MIT License</span>
+</footer>
+
+</div>
+</body>
+</html>

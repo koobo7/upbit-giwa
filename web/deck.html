@@ -1,0 +1,513 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="AI 에이전트에게 지갑을 맡기되, 한도는 컨트랙트가 지킵니다. GIWA Sepolia 배포 완료.">
+<meta property="og:title" content="INGAM — AI 에이전트를 위한 온체인 위임 결제 레이어">
+<meta property="og:description" content="AI 에이전트에게 지갑을 맡기되, 한도는 컨트랙트가 지킵니다.">
+<meta property="og:type" content="website">
+<link rel="icon" href="seal.svg">
+<style>*{margin:0;padding:0;box-sizing:border-box}</style>
+<title>INGAM — AI 에이전트를 위한 온체인 위임 결제 레이어</title>
+
+<style>
+  :root {
+    --ink:      #141210;
+    --inju:     #C8382F;
+    --inju-dim: #9E2C25;
+    --hanji:    #EDE7DC;
+    --neutral:  #8A8078;
+    --ok:       #3F7D58;
+    --deny:     #B0453C;
+
+    --bg:       var(--hanji);
+    --fg:       var(--ink);
+    --muted:    #6E655C;
+    --rule:     #CFC5B6;
+    --panel:    #E4DCCE;
+    --panel-2:  #DAD0BF;
+
+    --display: "Nanum Myeongjo", "Apple SD Gothic Neo", "Batang", serif;
+    --body: "Pretendard", -apple-system, "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+    --mono: "JetBrains Mono", "D2Coding", ui-monospace, "Consolas", monospace;
+
+    --s1: .78rem;  --s2: .95rem;  --s3: 1.15rem;
+    --s4: 1.55rem; --s5: 2.3rem;  --s6: 3.4rem; --s7: 5rem;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141210; --fg: #EDE7DC; --muted: #9A9088;
+      --rule: #2E2A26; --panel: #1D1A17; --panel-2: #262220;
+      --inju: #E0574C; --inju-dim: #C8382F;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #141210; --fg: #EDE7DC; --muted: #9A9088;
+    --rule: #2E2A26; --panel: #1D1A17; --panel-2: #262220;
+    --inju: #E0574C; --inju-dim: #C8382F;
+  }
+  :root[data-theme="light"] {
+    --bg: #EDE7DC; --fg: #141210; --muted: #6E655C;
+    --rule: #CFC5B6; --panel: #E4DCCE; --panel-2: #DAD0BF;
+    --inju: #C8382F; --inju-dim: #9E2C25;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--body);
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* 좌측 인선(印線) — 진행 표시 */
+  .spine {
+    position: fixed; left: 0; top: 0; bottom: 0; width: 3px;
+    background: var(--rule); z-index: 50;
+  }
+  .spine i {
+    position: absolute; left: 0; top: 0; width: 100%; height: 0%;
+    background: var(--inju); display: block;
+    transition: height .25s linear;
+  }
+
+  .deck { scroll-snap-type: y mandatory; }
+
+  section {
+    min-height: 100vh;
+    scroll-snap-align: start;
+    display: flex; flex-direction: column; justify-content: center;
+    padding: clamp(2.5rem, 6vw, 6rem) clamp(1.6rem, 7vw, 8rem);
+    gap: 1.6rem;
+    border-bottom: 1px solid var(--rule);
+    position: relative;
+  }
+
+  .num {
+    position: absolute; top: clamp(1.4rem, 3vw, 2.6rem);
+    right: clamp(1.4rem, 5vw, 4rem);
+    font-family: var(--mono); font-size: var(--s1);
+    color: var(--muted); letter-spacing: .12em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .eyebrow {
+    font-size: var(--s1); letter-spacing: .22em; text-transform: uppercase;
+    color: var(--inju); font-weight: 700;
+  }
+
+  h1, h2 {
+    font-family: var(--display);
+    font-weight: 700; line-height: 1.22;
+    text-wrap: balance; letter-spacing: -.01em;
+  }
+  h1 { font-size: clamp(2.6rem, 7vw, var(--s7)); }
+  h2 { font-size: clamp(1.8rem, 4.4vw, var(--s6)); }
+  h3 {
+    font-family: var(--display); font-weight: 700;
+    font-size: var(--s4); text-wrap: balance;
+  }
+
+  p { max-width: 62ch; font-size: clamp(var(--s2), 1.6vw, var(--s3)); }
+  p.lead { font-size: clamp(var(--s3), 2vw, var(--s4)); color: var(--fg); }
+  .muted { color: var(--muted); }
+  strong { color: var(--inju); font-weight: 700; }
+
+  code, .mono { font-family: var(--mono); font-size: .88em; }
+
+  a { color: var(--inju); text-underline-offset: .22em; }
+  a:focus-visible, [tabindex]:focus-visible {
+    outline: 2px solid var(--inju); outline-offset: 3px;
+  }
+
+  .scroll-x { overflow-x: auto; max-width: 100%; }
+
+  /* --- 표지 --- */
+  .cover {
+    display: grid; gap: clamp(2rem, 5vw, 4.5rem);
+    grid-template-columns: 1fr;
+    align-items: center;
+  }
+  @media (min-width: 860px) {
+    .cover { grid-template-columns: minmax(180px, 260px) 1fr; }
+  }
+  .seal-wrap { display: flex; justify-content: flex-start; }
+  .seal {
+    width: clamp(120px, 22vw, 240px); height: auto;
+    color: var(--inju);
+    animation: stamp .9s cubic-bezier(.2,1.4,.35,1) both;
+  }
+  @keyframes stamp {
+    0%   { opacity: 0; transform: scale(1.6) rotate(-9deg); filter: blur(3px); }
+    55%  { opacity: 1; transform: scale(.94) rotate(-2deg); filter: blur(0); }
+    100% { opacity: 1; transform: scale(1) rotate(-2deg); }
+  }
+  .cover-text { display: flex; flex-direction: column; gap: 1.1rem; }
+  h1 .kr {
+    display: block; font-size: .3em; letter-spacing: .5em;
+    color: var(--muted); margin-top: .5rem; font-weight: 400;
+  }
+  .meta { font-size: var(--s1); color: var(--muted); letter-spacing: .04em; }
+
+  /* --- 2열 카드 --- */
+  .split {
+    display: grid; gap: 1.1rem;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  }
+  .card {
+    background: var(--panel); border: 1px solid var(--rule);
+    padding: 1.5rem 1.6rem; display: flex; flex-direction: column; gap: .6rem;
+  }
+  .card h3 { font-size: var(--s3); }
+  .card p { font-size: var(--s2); max-width: none; }
+  .card.bad { border-left: 3px solid var(--deny); }
+
+  /* --- 흐름도 --- */
+  .flow {
+    display: flex; align-items: stretch; gap: .7rem;
+    padding-bottom: .6rem;
+  }
+  .step {
+    flex: 1 1 0; min-width: 150px;
+    background: var(--panel); border: 1px solid var(--rule);
+    padding: 1.1rem 1.2rem; display: flex; flex-direction: column; gap: .35rem;
+  }
+  .step.accent { border-color: var(--inju); background: var(--panel-2); }
+  .step .k {
+    font-family: var(--mono); font-size: var(--s1);
+    letter-spacing: .1em; color: var(--inju); font-weight: 700;
+  }
+  .step .v { font-size: var(--s2); color: var(--fg); }
+  .arrow {
+    align-self: center; color: var(--muted);
+    font-size: var(--s4); flex: 0 0 auto;
+  }
+
+  /* --- 규칙 목록 --- */
+  .rules {
+    display: grid; gap: 0;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    border-top: 1px solid var(--rule);
+  }
+  .rule {
+    display: grid; grid-template-columns: minmax(96px, 130px) 1fr;
+    gap: 1rem; align-items: baseline;
+    padding: .85rem .2rem;
+    border-bottom: 1px solid var(--rule);
+  }
+  .rk {
+    font-family: var(--display); font-weight: 700;
+    font-size: var(--s2); color: var(--inju);
+  }
+  .rv { font-size: var(--s2); color: var(--fg); }
+  .rv code { color: var(--muted); }
+
+  /* --- 원장(데모 표) --- */
+  .ledger { display: flex; flex-direction: column; min-width: 100%; }
+  .ledger .row {
+    display: grid;
+    grid-template-columns: minmax(160px, 2fr) minmax(80px, .8fr) minmax(74px, .7fr) minmax(120px, 1.2fr);
+    gap: 1rem; align-items: center;
+    padding: .7rem .2rem; border-bottom: 1px solid var(--rule);
+    font-size: var(--s2); white-space: nowrap;
+  }
+  .ledger .head {
+    font-family: var(--mono); font-size: var(--s1);
+    letter-spacing: .12em; text-transform: uppercase;
+    color: var(--muted); border-bottom-color: var(--fg);
+  }
+  .ledger .n { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .path {
+    font-size: var(--s1); letter-spacing: .06em;
+    color: var(--muted);
+  }
+  .path.on  { color: var(--fg); }
+  .path.off { color: var(--muted); }
+  .ledger .v { font-weight: 700; font-size: var(--s1); letter-spacing: .04em; }
+  .ledger .v.ok   { color: var(--ok); }
+  .ledger .v.deny { color: var(--deny); }
+  .ledger .v.ok::before,
+  .ledger .v.deny::before {
+    content: ""; display: inline-block;
+    width: .5em; height: .5em; margin-right: .55em;
+    background: currentColor; border-radius: 50%;
+    vertical-align: .05em;
+  }
+
+  /* --- 왜 GIWA (4항목) --- */
+  .why {
+    display: grid; gap: .8rem;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  }
+  .w {
+    display: flex; flex-direction: column; gap: .25rem;
+    padding: .9rem 1rem; background: var(--panel);
+    border-left: 3px solid var(--inju);
+  }
+  .wk { font-family: var(--display); font-weight: 700; font-size: var(--s3); }
+  .wv { font-size: var(--s1); color: var(--muted); }
+
+  /* --- 로드맵 --- */
+  .road { display: flex; gap: .7rem; padding-bottom: .6rem; }
+  .ph {
+    flex: 1 1 0; min-width: 200px;
+    display: flex; flex-direction: column; gap: .4rem;
+    padding: 1rem 1.1rem; border: 1px solid var(--rule);
+  }
+  .ph.done { border-color: var(--ok); background: var(--panel); }
+  .pk {
+    font-family: var(--mono); font-size: var(--s1);
+    letter-spacing: .12em; text-transform: uppercase; color: var(--muted);
+  }
+  .ph.done .pk { color: var(--ok); font-weight: 700; }
+  .pv { font-size: var(--s2); }
+
+  /* --- 링크 카드 --- */
+  .links {
+    display: grid; gap: .8rem;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  }
+  .lk {
+    display: flex; flex-direction: column; gap: .3rem;
+    padding: 1rem 1.15rem; background: var(--panel);
+    border: 1px solid var(--rule); text-decoration: none;
+    transition: border-color .18s ease, transform .18s ease;
+  }
+  a.lk:hover { border-color: var(--inju); transform: translateY(-2px); }
+  .lkk {
+    font-size: var(--s1); letter-spacing: .14em;
+    text-transform: uppercase; color: var(--inju); font-weight: 700;
+  }
+  .lkv { font-size: var(--s2); color: var(--fg); word-break: break-all; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+
+  @media print {
+    .spine { display: none; }
+    section { min-height: auto; page-break-after: always; border-bottom: none; }
+  }
+</style>
+
+</head>
+<body>
+<div class="spine"><i id="spine-fill"></i></div>
+
+<div class="deck">
+
+<!-- 01 표지 -->
+<section id="s1">
+  <span class="num">01 / 10</span>
+  <div class="cover">
+    <div class="seal-wrap">
+      <svg class="seal" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" aria-label="인감">
+        <defs><clipPath id="sealClip"><circle cx="50" cy="50" r="46"/></clipPath></defs>
+        <g clip-path="url(#sealClip)">
+          <circle cx="50" cy="50" r="46" fill="currentColor" opacity=".07"/>
+        </g>
+        <circle cx="50" cy="50" r="44" fill="none" stroke="currentColor" stroke-width="5"/>
+        <line x1="50" y1="12" x2="50" y2="88" stroke="currentColor" stroke-width="2.5"/>
+        <text x="29" y="43" text-anchor="middle" fill="currentColor" font-size="26" font-weight="700" font-family="Nanum Myeongjo, Apple SD Gothic Neo, Batang, serif">인</text>
+        <text x="71" y="43" text-anchor="middle" fill="currentColor" font-size="26" font-weight="700" font-family="Nanum Myeongjo, Apple SD Gothic Neo, Batang, serif">감</text>
+        <text x="50" y="78" text-anchor="middle" fill="currentColor" font-size="17" font-weight="700" letter-spacing="1" font-family="Nanum Myeongjo, Apple SD Gothic Neo, Batang, serif">委任</text>
+      </svg>
+    </div>
+    <div class="cover-text">
+      <span class="eyebrow">GASOK · Track 04 AI / Web3</span>
+      <h1>INGAM<span class="kr">인감</span></h1>
+      <p class="lead">AI 에이전트에게 지갑을 맡기되,<br>한도는 컨트랙트가 지킵니다.</p>
+      <p class="mono meta">GIWA Sepolia 배포 완료 · 1인 개발 · 김규보</p>
+    </div>
+  </div>
+</section>
+
+<!-- 02 문제 -->
+<section id="s2">
+  <span class="num">02 / 10</span>
+  <span class="eyebrow">문제</span>
+  <h2>지금은 전부 아니면 전무입니다</h2>
+  <p class="lead">AI 에이전트가 대신 결제하게 하려면, 방법은 하나뿐입니다. <strong>지갑 키를 통째로 넘기는 것.</strong></p>
+  <div class="split">
+    <div class="card bad">
+      <h3>키를 넘긴다</h3>
+      <p class="muted">프롬프트 인젝션 한 번, 버그 하나, 잘못된 툴 호출 하나에 잔고 전부가 나갑니다. 사후에 알 수 있을 뿐입니다.</p>
+    </div>
+    <div class="card bad">
+      <h3>안 넘긴다</h3>
+      <p class="muted">매 결제마다 사람이 승인합니다. 에이전트에게 일을 맡기는 의미가 사라집니다.</p>
+    </div>
+  </div>
+  <p>중간이 없습니다. <strong>INGAM은 그 중간을 만듭니다.</strong></p>
+</section>
+
+<!-- 03 왜 지금 -->
+<section id="s3">
+  <span class="num">03 / 10</span>
+  <span class="eyebrow">왜 지금인가</span>
+  <h2>에이전트는 이미 돈을 쓰기 시작했습니다</h2>
+  <div class="split">
+    <div class="card">
+      <h3>지출은 이미 발생 중</h3>
+      <p class="muted">API 크레딧, 클라우드 사용료, 구독 갱신. 사람이 아니라 프로그램이 트리거하는 결제가 이미 일상입니다.</p>
+    </div>
+    <div class="card">
+      <h3>권한 계층만 없다</h3>
+      <p class="muted">얼마까지, 어디에, 언제까지 — 이 규칙이 앱이나 서버 안에 있습니다. 서버가 죽으면, 코드가 뚫리면 같이 무너집니다.</p>
+    </div>
+  </div>
+  <p>규칙을 <strong>앱이 아니라 체인에</strong> 두면 이 문제가 풀립니다. 만든 사람이 사라져도 한도는 남습니다.</p>
+</section>
+
+<!-- 04 해법 -->
+<section id="s4">
+  <span class="num">04 / 10</span>
+  <span class="eyebrow">해법</span>
+  <h2>도장의 원리를 체인으로</h2>
+  <p class="lead">인감은 <strong>맡기되 범위가 정해진</strong> 권한의 원형입니다. 위임장에 찍힌 도장은 그 문서에만 효력이 있습니다.</p>
+  <div class="flow scroll-x">
+    <div class="step"><span class="k">위임자</span><span class="v">한도를 정해 위임 발급</span></div>
+    <div class="arrow" aria-hidden="true">→</div>
+    <div class="step"><span class="k">에이전트</span><span class="v">자기 지갑으로 결제 시도</span></div>
+    <div class="arrow" aria-hidden="true">→</div>
+    <div class="step accent"><span class="k">DelegationVault</span><span class="v">한도·수취인·만료 검사</span></div>
+    <div class="arrow" aria-hidden="true">→</div>
+    <div class="step"><span class="k">결과</span><span class="v">송금 또는 사유와 함께 거절</span></div>
+  </div>
+  <p class="muted">에이전트는 키를 갖지 않습니다. 금고에 <em>요청</em>할 뿐이고, 판정은 컨트랙트가 합니다.</p>
+</section>
+
+<!-- 05 컨트랙트가 강제하는 것 -->
+<section id="s5">
+  <span class="num">05 / 10</span>
+  <span class="eyebrow">DelegationVault.sol</span>
+  <h2>컨트랙트가 강제하는 8가지</h2>
+  <div class="rules">
+    <div class="rule"><span class="rk">건당 한도</span><span class="rv">1회 결제 상한. 넘으면 <code>PerTxLimitExceeded</code></span></div>
+    <div class="rule"><span class="rk">일일 한도</span><span class="rv">하루 누적 상한. 날짜가 바뀌면 자동 회복</span></div>
+    <div class="rule"><span class="rk">총 한도</span><span class="rv">위임 전체 기간 상한. 회복되지 않음</span></div>
+    <div class="rule"><span class="rk">허용 수취인</span><span class="rv">화이트리스트 밖으로는 송금 불가</span></div>
+    <div class="rule"><span class="rk">만료</span><span class="rv">시각이 지나면 아무 조치 없이도 자동 무효</span></div>
+    <div class="rule"><span class="rk">즉시 회수</span><span class="rv">트랜잭션 하나로 전체 권한 소멸</span></div>
+    <div class="rule"><span class="rk">감사 로그</span><span class="rv">모든 결제가 메모와 함께 온체인 이벤트로 기록</span></div>
+    <div class="rule"><span class="rk">자기송금 차단</span><span class="rv">회수 불가능한 자금 소각을 구조적으로 방지</span></div>
+  </div>
+  <p class="muted mono">460 LOC · Solidity 0.8.26 · <a href="https://sepolia-explorer.giwa.io/address/0xfFFffF47dD6944c4d01d2cb4CF00ed83a90788fd">0xfFFffF47…88fd</a></p>
+</section>
+
+<!-- 06 데모 -->
+<section id="s6">
+  <span class="num">06 / 10</span>
+  <span class="eyebrow">지금 동작 중</span>
+  <h2>에이전트 셋이 각자의 지갑으로 쓰고 있습니다</h2>
+  <p class="lead">대시보드를 열면 자율 결제 에이전트가 구독료·API 크레딧·생필품을 실시간으로 결제합니다. 한도를 넘거나 등록되지 않은 곳으로 가려는 시도는 컨트랙트가 거절합니다.</p>
+  <div class="ledger scroll-x">
+    <div class="row head"><span>가맹점</span><span>금액</span><span>경로</span><span>판정</span></div>
+    <div class="row"><span>OpenAI API 크레딧</span><span class="n">0.0120</span><span class="path on">온체인</span><span class="v ok">승인</span></div>
+    <div class="row"><span>넷플릭스 구독</span><span class="n">0.0045</span><span class="path off">정산</span><span class="v ok">승인</span></div>
+    <div class="row"><span>쿠팡 생필품</span><span class="n">0.0310</span><span class="path off">정산</span><span class="v deny">건당 한도 초과</span></div>
+    <div class="row"><span>미등록 지갑</span><span class="n">0.0020</span><span class="path">—</span><span class="v deny">수취인 미허용</span></div>
+    <div class="row"><span>AWS 사용료</span><span class="n">0.0088</span><span class="path on">온체인</span><span class="v ok">승인</span></div>
+  </div>
+  <p class="muted">에이전트마다 지갑이 다릅니다. <strong>하나가 탈취되어도 나머지는 영향을 받지 않습니다.</strong></p>
+</section>
+
+<!-- 07 보안 설계 -->
+<section id="s7">
+  <span class="num">07 / 10</span>
+  <span class="eyebrow">설계에서 신경 쓴 것</span>
+  <h2>뚫리는 경로를 먼저 막았습니다</h2>
+  <div class="split">
+    <div class="card">
+      <h3>재발급 시 화이트리스트 자동 무효화</h3>
+      <p class="muted">위임을 다시 발급하면 nonce가 올라가며 위임 ID가 바뀝니다. 예전 위임의 허용 수취인이 되살아나는 사고를 구조적으로 막습니다.</p>
+    </div>
+    <div class="card">
+      <h3>재진입 방어 · CEI 패턴</h3>
+      <p class="muted">상태를 먼저 갱신하고 송금합니다. 위임이 살아 있어도 위임자의 출금이 항상 우선합니다.</p>
+    </div>
+    <div class="card">
+      <h3>커스텀 에러로 사유 반환</h3>
+      <p class="muted">왜 막혔는지가 숫자와 함께 돌아옵니다. 에이전트와 UI가 <code>canSpend()</code>로 실행 전에 확인할 수 있습니다.</p>
+    </div>
+    <div class="card">
+      <h3>34개 규칙 검증 테스트</h3>
+      <p class="muted">차단되어야 하는 경우를 <em>각각 어떤 에러로</em> 막는지까지 단언합니다. 한도 초과·미등록 수취인·만료·회수 전부.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 08 정산 -->
+<section id="s8">
+  <span class="num">08 / 10</span>
+  <span class="eyebrow">가장 자주 받는 질문</span>
+  <h2>쿠팡은 ETH를 받지 않는데요</h2>
+  <p class="lead">맞습니다. 그래서 INGAM은 <strong>결제 수단이 아닙니다.</strong> 결제 수단을 바꾸려는 시도는 실패합니다 — 가맹점을 설득하는 데 수십 년이 걸리니까요.</p>
+  <p>INGAM이 대체하는 것은 <strong>권한 계층</strong>입니다. 기존에는 카드사 서버나 앱 안에 있던 그 층을 체인으로 옮깁니다. <em>결제 자체는 원화로 나가도 됩니다.</em></p>
+  <div class="flow scroll-x">
+    <div class="step"><span class="k">에이전트</span><span class="v">쿠팡에서 카드 결제</span></div>
+    <div class="arrow" aria-hidden="true">→</div>
+    <div class="step accent"><span class="k">정산 파트너</span><span class="v"><code>canSpend()</code> 조회</span></div>
+    <div class="arrow" aria-hidden="true">→</div>
+    <div class="step"><span class="k">승인 시</span><span class="v">파트너가 원화 대납, 쿠팡은 정상 결제</span></div>
+    <div class="arrow" aria-hidden="true">→</div>
+    <div class="step"><span class="k">정산</span><span class="v">파트너가 금고에서 회수</span></div>
+  </div>
+  <p class="muted"><strong>쿠팡은 아무것도 몰라도 됩니다.</strong> 에이전트도 특별한 일을 하지 않습니다. 그런데 한도는 온체인에서 강제됩니다. 파트너 연동에 필요한 <code>canSpend()</code>는 <em>이미 배포돼 있습니다.</em></p>
+</section>
+
+<!-- 09 왜 GIWA + 로드맵 -->
+<section id="s9">
+  <span class="num">09 / 10</span>
+  <span class="eyebrow">왜 GIWA여야 하는가</span>
+  <h2>정산 파트너는 규제 대상입니다</h2>
+  <p class="lead">익명 지갑이 익명 지갑에 권한을 넘기는 구조는 <strong>어떤 PG도 받지 않습니다.</strong> 누구에게 대납하는지 모르면 사업을 할 수 없으니까요.</p>
+  <p><strong>도장(Dojang)이 이 문제를 풉니다.</strong> KYC 기관이 발급한 온체인 검증이 위임의 뿌리에 있으면, 파트너는 "실명 확인된 위임자가 이 한도를 승인했다"를 체인에서 직접 확인합니다. 계약서도 별도 심사도 필요 없습니다.</p>
+  <div class="why">
+    <div class="w"><span class="wk">도장</span><span class="wv">위임 뿌리의 KYC 검증</span></div>
+    <div class="w"><span class="wk">업비트 온램프</span><span class="wv">금고 충전 경로</span></div>
+    <div class="w"><span class="wk">L2 수수료</span><span class="wv">소액·고빈도 정산</span></div>
+    <div class="w"><span class="wk">기와 월렛</span><span class="wv">회수 버튼의 위치</span></div>
+  </div>
+  <div class="road scroll-x">
+    <div class="ph done"><span class="pk">완료</span><span class="pv"><code>spend()</code> · 3중 한도 · 화이트리스트 · <code>canSpend()</code></span></div>
+    <div class="ph"><span class="pk">Phase 1</span><span class="pv">ERC20 결제 · 파트너 정산 컨트랙트</span></div>
+    <div class="ph"><span class="pk">Phase 3</span><span class="pv">도장 KYC 연동 · PG 파일럿 실거래</span></div>
+  </div>
+</section>
+
+<!-- 10 팀 + 검증 -->
+<section id="s10">
+  <span class="num">10 / 10</span>
+  <span class="eyebrow">팀 · 검증 가능한 산출물</span>
+  <h2>1인이 만들었고, 지금 돌아갑니다</h2>
+  <p class="lead"><strong>김규보</strong> — 30년차 풀스택 개발자. 컨트랙트·에이전트 데몬·대시보드·배포·정산 설계까지 혼자 완성해 GIWA Sepolia에서 동작 중입니다.</p>
+  <div class="links">
+    <a class="lk" href="https://upbit-giwa.metabox.pro"><span class="lkk">라이브 대시보드</span><span class="lkv mono">upbit-giwa.metabox.pro</span></a>
+    <a class="lk" href="https://github.com/koobo7/upbit-giwa"><span class="lkk">GitHub</span><span class="lkv mono">github.com/koobo7/upbit-giwa</span></a>
+    <a class="lk" href="https://sepolia-explorer.giwa.io/address/0xfFFffF47dD6944c4d01d2cb4CF00ed83a90788fd"><span class="lkk">배포 컨트랙트</span><span class="lkv mono">0xfFFffF47…88fd</span></a>
+    <div class="lk"><span class="lkk">체인</span><span class="lkv mono">GIWA Sepolia · 91342</span></div>
+  </div>
+  <p class="muted">설치 없이 <code>npm test</code> 하나로 34개 규칙 검증이 전부 돌아갑니다.</p>
+</section>
+
+</div>
+
+<script>
+  (function () {
+    var fill = document.getElementById('spine-fill');
+    if (!fill) return;
+    function update() {
+      var h = document.documentElement.scrollHeight - window.innerHeight;
+      var p = h > 0 ? (window.scrollY / h) * 100 : 0;
+      fill.style.height = p.toFixed(2) + '%';
+    }
+    window.addEventListener('scroll', update, { passive: true });
+    window.addEventListener('resize', update);
+    update();
+  })();
+</script>
+</body>
+</html>
