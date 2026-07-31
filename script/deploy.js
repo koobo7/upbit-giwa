@@ -74,12 +74,16 @@ async function main() {
   const address = await vault.getAddress();
   console.log(`\n배포 완료  ${address}`);
 
+  // 대시보드가 감사 로그를 배포 시점부터 조회할 수 있도록 블록 번호를 남긴다.
+  const rc = await provider.getTransactionReceipt(tx.hash);
+
   const out = {
     address,
     chainId: Number(net.chainId),
     rpc,
     deployer: wallet.address,
     txHash: tx.hash,
+    blockNumber: rc?.blockNumber ?? null,
     deployedAt: new Date().toISOString(),
   };
   const json = JSON.stringify(out, null, 2);

@@ -4,5 +4,6 @@
   "rpc": "https://sepolia-rpc.giwa.io",
   "deployer": "0x538F0C6c18014D3C31af08f0e25D8404D893A66F",
   "txHash": "0x926e7f02fd76ebcb493e54aeeea1ec980eca72bd62ada7974f64d1c18986704f",
-  "deployedAt": "2026-07-31T01:27:35.524Z"
+  "deployedAt": "2026-07-31T01:27:35.524Z",
+  "blockNumber": 32116136
 }
