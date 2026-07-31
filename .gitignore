@@ -13,3 +13,22 @@ demo-merchants.json
 
 # 에이전트 활동 기록 — 런타임 산출물. 서버가 직접 쓰므로 추적하지 않는다.
 web/agent-activity.json
+
+# 내부 작업 문서 — 공개 저장소에 노출되면 안 된다.
+CLAUDE.md
+AGENTS.md
+SUBMIT.md
+TEAM.md
+APPLICATION_KO.md
+docs-internal/
+*.local.md
+*.md.local
+
+# AI 도구 작업 디렉터리
+.claude/
+.lai/
+.cursor/
+.aider*
+.continue/
+.windsurf/
+.github/copilot-instructions.md

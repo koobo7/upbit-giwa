@@ -1,3 +1,5 @@
+<img src="web/seal.svg" alt="인감" width="110" align="right" />
+
 # INGAM (인감)
 
 **AI 에이전트를 위한 위임 결제 레이어** — GIWA 체인 위에서 동작합니다.
@@ -15,8 +17,8 @@ GASOK(가속) 프로그램 · 트랙 4 (AI / Web3) 지원 프로젝트.
 ```bash
 npm install
 npm run build      # 컨트랙트 컴파일
-npm test           # 28개 규칙 테스트
-npm run demo       # 데모 시나리오 (영상용)
+npm test           # 34개 규칙 테스트
+npm run demo       # 로컬 체인에서 전체 시나리오 재생
 ```
 
 ## GIWA Sepolia 테스트넷에 배포
@@ -76,11 +78,13 @@ npm run web        # http://localhost:5173   (PORT=8080 npm run web 로 변경 �
 ```
 contracts/DelegationVault.sol   위임 규칙을 강제하는 핵심 컨트랙트
 script/deploy.js                GIWA Sepolia 배포
-script/demo.js                  데모데이 영상용 시나리오
+script/demo.js                  로컬 체인 시나리오 재생
 web/index.html                  위임 발급·회수·감사 로그 대시보드 (단일 파일)
-test.js                         28개 규칙 검증
+test.js                         34개 규칙 검증
 compile.js                      solc 컴파일 (빌드 산출물: build/)
-APPLICATION_KO.md               GASOK 지원서 초안
+SETTLEMENT.md                   암호화폐를 받지 않는 가맹점 정산 설계
+web/deck.html                   피치덱
+web/docs.html                   기술 문서
 ```
 
 ### DelegationVault가 강제하는 것
@@ -110,30 +114,30 @@ APPLICATION_KO.md               GASOK 지원서 초안
 
 ---
 
-## 데모 영상 (2분) 구성
+## 배포 정보
 
-`npm run demo`를 화면 녹화하면 그대로 영상이 됩니다. `PAUSE=1500 npm run demo`로 속도 조절 가능합니다.
+GIWA Sepolia에 배포되어 동작 중입니다.
 
-1. **0:00–0:20** 문제 제기 — "AI에게 결제를 맡기고 싶지만, 키를 넘기는 순간 잔액 전부가 위험합니다"
-2. **0:20–0:40** 위임장 발급 화면 — 한도와 허용처가 온체인에 새겨짐
-3. **0:40–1:00** 에이전트가 사람 개입 없이 자동 결제 (통과)
-4. **1:00–1:30** 탈취 시나리오 — 큰 금액, 모르는 주소. 둘 다 컨트랙트가 거절
-5. **1:30–1:50** 회수 버튼 → 에이전트 즉시 무력화
-6. **1:50–2:00** 왜 GIWA인가 — 도장 KYC 검증, 업비트 온램프, L2 수수료
+| 항목 | 값 |
+|---|---|
+| 컨트랙트 | `0xfFFffF47dD6944c4d01d2cb4CF00ed83a90788fd` |
+| 익스플로러 | [sepolia-explorer.giwa.io](https://sepolia-explorer.giwa.io/address/0xfFFffF47dD6944c4d01d2cb4CF00ed83a90788fd?tab=contract) (소스 검증 완료) |
+| 대시보드 | [upbit-giwa.metabox.pro](https://upbit-giwa.metabox.pro) |
+| 체인 | GIWA Sepolia (chainId 91342) |
 
-마지막 20초가 제일 중요합니다. 다른 체인에서도 되는 프로젝트로 보이면 떨어집니다.
+대시보드를 열면 자율 결제 에이전트 세 개가 각자의 지갑으로 구독료·API 크레딧·
+생필품을 결제하는 것을 실시간으로 볼 수 있습니다. 한도를 넘거나 등록되지 않은
+곳으로 가려는 시도는 컨트랙트가 거절하며, 그 기록도 익스플로러 링크와 함께 남습니다.
 
----
+에이전트마다 지갑이 다르므로 한도와 회수가 독립적으로 동작합니다.
+하나가 탈취되어도 나머지는 영향을 받지 않습니다.
 
-## 제출 전 체크리스트
+## 더 읽을거리
 
-- [x] `npm test` 통과 — 28개 전부 (Node 24.13.0에서 확인)
-- [x] `npm run demo` 4장면 정상 재생
-- [x] 깃허브 저장소 푸시
-- [ ] 깃허브 저장소 **공개 설정 확인** (private이면 심사위원이 못 봅니다)
-- [ ] GIWA 테스트넷에 배포하고 익스플로러 링크 확보
-- [ ] `npm test` 통과 스크린샷
-- [ ] *(선택)* 데모 영상 — 공지에 제출 요구는 없다. 신청 폼에 링크 입력란이 있으면 첨부
-- [ ] `TEAM.md` 대괄호 채우기
-- [ ] 신청서에 트랙 4 선택
-- [ ] **마감: 2026-07-31 23:59:59 KST**
+- [피치덱](https://koobo7.github.io/upbit-giwa/deck.html) — 프로젝트 개요 10장
+- [기술 문서](https://koobo7.github.io/upbit-giwa/docs.html) — 상태 모델·판정 로직·보안 설계·정산 아키텍처
+- [SETTLEMENT.md](SETTLEMENT.md) — 암호화폐를 받지 않는 가맹점은 어떻게 결제하는가
+
+## 라이선스
+
+MIT
