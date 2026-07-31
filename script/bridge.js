@@ -12,6 +12,28 @@
  *       PRIVATE_KEY는 환경변수로만 넘기고 파일에 저장하지 말 것.
  */
 const { ethers } = require('ethers');
+const readline = require('readline');
+
+/** 키를 화면에 찍지 않고 입력받는다. 명령줄에 남지 않으므로 셸 히스토리에도 안 남는다. */
+function askSecret(question) {
+  return new Promise((resolve) => {
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: true });
+    const onData = (ch) => {
+      // 입력 중인 글자를 지워서 화면에 보이지 않게 한다.
+      if (['\n', '\r', ''].includes(ch.toString())) return;
+      readline.moveCursor(process.stdout, -1000, 0);
+      readline.clearLine(process.stdout, 1);
+      process.stdout.write(question);
+    };
+    process.stdin.on('data', onData);
+    rl.question(question, (ans) => {
+      process.stdin.removeListener('data', onData);
+      rl.close();
+      process.stdout.write('\n');
+      resolve(ans.trim());
+    });
+  });
+}
 
 // GIWA Sepolia의 L1 OptimismPortal (Ethereum Sepolia에 배포됨).
 // 체인에서 코드 존재와 예치 잔액을 확인한 주소다.
@@ -21,12 +43,20 @@ const L2_RPC = 'https://sepolia-rpc.giwa.io';
 const L2_EXPLORER = 'https://sepolia-explorer.giwa.io';
 
 async function main() {
-  const pk = process.env.PRIVATE_KEY;
+  // 환경변수가 있으면 그걸 쓰고, 없으면 직접 물어본다.
+  let pk = process.env.PRIVATE_KEY;
   if (!pk) {
-    console.error('PRIVATE_KEY 환경변수가 필요합니다.');
-    console.error('  PowerShell:  $env:PRIVATE_KEY="0x..."; node script/bridge.js');
+    console.log('개인키를 입력하세요. 화면에 표시되지 않고 어디에도 저장되지 않습니다.');
+    console.log('(브레이브 지갑 > 계정 옆 ⋮ > 계정 세부정보 > 개인 키 표시)\n');
+    pk = await askSecret('개인키: ');
+  }
+  if (!pk) { console.error('입력이 없습니다.'); process.exit(1); }
+  if (!pk.startsWith('0x')) pk = '0x' + pk;   // 0x 없이 붙여넣는 경우가 흔하다
+  if (!/^0x[0-9a-fA-F]{64}$/.test(pk)) {
+    console.error(`개인키 형식이 아닙니다. 0x를 포함해 66자여야 합니다 (입력된 길이: ${pk.length}).`);
     process.exit(1);
   }
+
   const amount = ethers.parseEther(process.argv[2] || '0.03');
 
   const l1 = new ethers.JsonRpcProvider(L1_RPC);

@@ -10,6 +10,27 @@
 const { ethers } = require('ethers');
 const fs = require('fs');
 const path = require('path');
+const readline = require('readline');
+
+/** 키를 화면에 찍지 않고 입력받는다. 명령줄에 남지 않으므로 셸 히스토리에도 안 남는다. */
+function askSecret(question) {
+  return new Promise((resolve) => {
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: true });
+    const onData = (ch) => {
+      if (['\n', '\r', ''].includes(ch.toString())) return;
+      readline.moveCursor(process.stdout, -1000, 0);
+      readline.clearLine(process.stdout, 1);
+      process.stdout.write(question);
+    };
+    process.stdin.on('data', onData);
+    rl.question(question, (ans) => {
+      process.stdin.removeListener('data', onData);
+      rl.close();
+      process.stdout.write('\n');
+      resolve(ans.trim());
+    });
+  });
+}
 
 const artifact = require('../build/DelegationVault.json');
 
@@ -18,11 +39,17 @@ const GIWA_SEPOLIA_EXPLORER = 'https://sepolia-explorer.giwa.io';
 
 async function main() {
   const rpc = process.env.RPC_URL || GIWA_SEPOLIA_RPC;
-  const pk = process.env.PRIVATE_KEY;
 
+  // 환경변수가 있으면 그걸 쓰고, 없으면 직접 물어본다.
+  let pk = process.env.PRIVATE_KEY;
   if (!pk) {
-    console.error('PRIVATE_KEY 환경변수가 필요합니다.');
-    console.error('예) PRIVATE_KEY=0xabc... npm run deploy');
+    console.log('개인키를 입력하세요. 화면에 표시되지 않고 어디에도 저장되지 않습니다.\n');
+    pk = await askSecret('개인키: ');
+  }
+  if (!pk) { console.error('입력이 없습니다.'); process.exit(1); }
+  if (!pk.startsWith('0x')) pk = '0x' + pk;
+  if (!/^0x[0-9a-fA-F]{64}$/.test(pk)) {
+    console.error(`개인키 형식이 아닙니다. 0x를 포함해 66자여야 합니다 (입력된 길이: ${pk.length}).`);
     process.exit(1);
   }
 
