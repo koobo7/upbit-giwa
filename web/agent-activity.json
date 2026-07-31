@@ -210,9 +210,53 @@
       "planTitle": "생활용품 정기 주문",
       "rail": "settled",
       "anomaly": null
+    },
+    {
+      "at": 1785473552275,
+      "merchant": "미등록 수취처 (넷플릭스 구독 사칭)",
+      "amount": "0.000000005803",
+      "status": "blocked",
+      "reason": "RECIPIENT_NOT_ALLOWED",
+      "planId": "T-1",
+      "planTitle": "구독 서비스 자동 갱신",
+      "rail": "settled",
+      "anomaly": "recipient"
+    },
+    {
+      "at": 1785473601599,
+      "merchant": "넷플릭스 구독",
+      "amount": "0.000000005282",
+      "status": "paid",
+      "txHash": "0x3694e77b9c3d2dbe63b99b3154b164af73e6461918852cdf65f5db8af7567eed",
+      "planId": "T-1",
+      "planTitle": "구독 서비스 자동 갱신",
+      "rail": "settled",
+      "anomaly": null
+    },
+    {
+      "at": 1785473650947,
+      "merchant": "도메인 갱신",
+      "amount": "0.000000006256",
+      "status": "paid",
+      "txHash": "0xee61e387b0f23871adf78e3ff15e3f8f62d56415bab1706113b0286e6000063a",
+      "planId": "T-2",
+      "planTitle": "개발 인프라 사용료 정산",
+      "rail": "onchain",
+      "anomaly": null
+    },
+    {
+      "at": 1785473696035,
+      "merchant": "OpenAI API 크레딧 → 미등록 가맹점",
+      "amount": "0.000000008296",
+      "status": "blocked",
+      "reason": "MERCHANT_NOT_ALLOWED",
+      "planId": "T-2",
+      "planTitle": "개발 인프라 사용료 정산",
+      "rail": "onchain",
+      "anomaly": "merchant"
     }
   ],
-  "updatedAt": "2026-07-31T04:51:47.209Z",
+  "updatedAt": "2026-07-31T04:54:56.070Z",
   "agent": "0xa686210a6291Da6A535E47592c087118604C8A47",
   "principal": "0x538F0C6c18014D3C31af08f0e25D8404D893A66F",
   "intervalSec": 45,
@@ -244,6 +288,6 @@
       ]
     }
   ],
-  "remainingToday": "0.0000198908",
-  "remainingTotal": "0.0001998908"
+  "remainingToday": "0.000019879262",
+  "remainingTotal": "0.000199879262"
 }
