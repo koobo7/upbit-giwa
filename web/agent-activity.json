@@ -12,9 +12,42 @@
       "planTitle": "구독 서비스 자동 갱신",
       "rail": "settled",
       "anomaly": null
+    },
+    {
+      "at": 1785472681217,
+      "merchant": "넷플릭스 구독",
+      "amount": "0.000000006163",
+      "status": "paid",
+      "txHash": "0x3354db53bb8ba33db78052176a7fd68a01dc8249dbefd84c6c21ca985369a6b8",
+      "planId": "T-1",
+      "planTitle": "구독 서비스 자동 갱신",
+      "rail": "settled",
+      "anomaly": null
+    },
+    {
+      "at": 1785472726300,
+      "merchant": "쿠팡 생필품",
+      "amount": "0.01",
+      "status": "blocked",
+      "reason": "PER_TX_LIMIT",
+      "planId": "T-3",
+      "planTitle": "생활용품 정기 주문",
+      "rail": "settled",
+      "anomaly": "pertx"
+    },
+    {
+      "at": 1785472775634,
+      "merchant": "배달 주문",
+      "amount": "0.000000008203",
+      "status": "paid",
+      "txHash": "0xab3b54e1260d144570241d0010240a5047fdbea4d42a3aa1e001bc0b7078c306",
+      "planId": "T-3",
+      "planTitle": "생활용품 정기 주문",
+      "rail": "settled",
+      "anomaly": null
     }
   ],
-  "updatedAt": "2026-07-31T04:37:11.915Z",
+  "updatedAt": "2026-07-31T04:39:35.673Z",
   "agent": "0xa686210a6291Da6A535E47592c087118604C8A47",
   "principal": "0x538F0C6c18014D3C31af08f0e25D8404D893A66F",
   "intervalSec": 45,
@@ -46,6 +79,6 @@
       ]
     }
   ],
-  "remainingToday": "0.000019994668",
-  "remainingTotal": "0.000199994668"
+  "remainingToday": "0.000019980302",
+  "remainingTotal": "0.000199980302"
 }
