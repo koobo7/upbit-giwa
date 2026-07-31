@@ -8,10 +8,14 @@
     "demo": "node compile.js && node script/demo.js",
     "deploy": "node compile.js && node script/deploy.js",
     "web": "node script/serve.js",
-    "agent": "node script/daemon.js",
-    "publish": "node script/publish.js"
+    "agent": "node script/daemon.js"
   },
-  "keywords": ["giwa", "ai-agent", "delegation", "payments"],
+  "keywords": [
+    "giwa",
+    "ai-agent",
+    "delegation",
+    "payments"
+  ],
   "license": "MIT",
   "dependencies": {
     "ethers": "^6.13.0",
