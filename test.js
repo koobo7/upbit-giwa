@@ -14,10 +14,18 @@ const iface = new ethers.Interface(artifact.abi);
 
 function revertName(e) {
   if (e.revert?.name) return e.revert.name;
-  const raw = e.info?.error?.data?.result ?? e.data;
-  if (typeof raw === 'string' && raw.startsWith('0x') && raw.length >= 10) {
-    const parsed = iface.parseError(raw);
-    if (parsed) return parsed.name;
+  // ganache는 실패 단계(call/estimateGas)에 따라 revert 데이터를 다른 위치에 담는다.
+  // 후보를 모두 훑어 커스텀 에러 셀렉터를 찾는다.
+  const d = e.info?.error?.data;
+  const cands = [e.data, d, d?.result, d?.data,
+                 ...(d && typeof d === 'object' ? Object.values(d).map(v => v?.return ?? v?.data ?? v) : [])];
+  for (const raw of cands) {
+    if (typeof raw === 'string' && raw.startsWith('0x') && raw.length >= 10) {
+      try {
+        const parsed = iface.parseError(raw);
+        if (parsed) return parsed.name;
+      } catch {}
+    }
   }
   return e.shortMessage ?? String(e);
 }
@@ -59,7 +67,13 @@ async function main() {
   const asAgent = vault.connect(agent);
   const asOther = vault.connect(other);
   const now = () => Math.floor(Date.now() / 1000);
-  const chainNow = async () => (await provider.getBlock('latest')).timestamp;
+  // ethers BrowserProvider가 blockNumber를 캐시하므로 'latest'는 낡은 블록을 볼 수 있다.
+  // evm_increaseTime 이후 시각이 반영되도록 raw 요청으로 최신 블록을 직접 읽는다.
+  const chainNow = async () => {
+    const bn = await g.request({ method: 'eth_blockNumber', params: [] });
+    const b = await g.request({ method: 'eth_getBlockByNumber', params: [bn, false] });
+    return Number(BigInt(b.timestamp));
+  };
 
   /* ── 1. 예치 ── */
   console.log('1. 금고 예치');
@@ -202,6 +216,43 @@ async function main() {
   );
   const [canC, reasonC] = await vault.canSpend(A.owner, A.agent, vaultAddr, E('0.5'));
   ok(canC === false && reasonC === 'SELF_RECIPIENT', 'canSpend도 SELF_RECIPIENT 통보');
+
+  /* ── 12-2. 가맹점 정책 (온체인 수취인과 별개 층) ── */
+  console.log('\n12-2. 가맹점 정책 — 쿠팡 같은 체인 밖 상점을 상점 단위로 통제');
+  const expiry5 = (await chainNow()) + 7 * 86400;
+  // 정산 파트너 한 곳만 수취인으로 두는 상황. 이대로면 어디에 쓸지 통제가 사라진다.
+  const partner = A.shop;
+  await (await vault.createDelegation(A.agent, E('1'), E('3'), E('10'), expiry5, true, [partner])).wait();
+
+  const COUPANG = ethers.id('coupang');
+  const CASINO = ethers.id('casino');
+  await (await vault.setMerchants(A.agent, [COUPANG], true)).wait();
+  await (await vault.setMerchantPolicy(A.agent, true)).wait();
+
+  ok(await vault.merchantPolicyOn(await vault.delegationId(A.owner, A.agent)) === true,
+     '가맹점 정책 활성화됨');
+
+  // 같은 파트너에게 보내더라도 가맹점이 다르면 컨트랙트가 거절한다.
+  await (await asAgent.spendAt(A.owner, partner, E('0.1'), '쿠팡 결제', COUPANG)).wait();
+  ok(true, '허용 가맹점(쿠팡)은 통과');
+
+  await expectRevert(
+    asAgent.spendAt(A.owner, partner, E('0.1'), '카지노 결제', CASINO),
+    'MerchantNotAllowed', '수취인은 같아도 미등록 가맹점이면 거절'
+  );
+
+  // 정책이 켜진 상태에서 가맹점 없이 결제하면 막힌다.
+  await expectRevert(
+    asAgent.spend(A.owner, partner, E('0.1'), '가맹점 미지정'),
+    'MerchantNotAllowed', '정책 활성 시 가맹점 미지정 결제는 거절'
+  );
+
+  const [canM, reasonM] = await vault.canSpendAt(A.owner, A.agent, partner, E('0.1'), CASINO);
+  ok(canM === false && reasonM === 'MERCHANT_NOT_ALLOWED',
+     'canSpendAt이 MERCHANT_NOT_ALLOWED 통보 (정산 파트너가 이 함수로 판단)');
+
+  const [canM2] = await vault.canSpendAt(A.owner, A.agent, partner, E('0.1'), COUPANG);
+  ok(canM2 === true, 'canSpendAt이 허용 가맹점은 true 반환');
 
   /* ── 13. 위임자는 언제든 자금 회수 ── */
   console.log('\n13. 위임자의 출금 우선권');

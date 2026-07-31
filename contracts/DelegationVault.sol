@@ -33,7 +33,18 @@ contract DelegationVault {
     mapping(address => mapping(address => uint64)) public delegationNonce;
 
     /// @notice delegationId => 수취인 => 허용 여부
+    /// @dev 온체인에서 실제로 자금을 받는 주소다. 정산 파트너 경로에서는 파트너 주소가 된다.
     mapping(bytes32 => mapping(address => bool)) public allowedRecipient;
+
+    /// @notice delegationId => 가맹점 해시 => 허용 여부
+    /// @dev 쿠팡·넷플릭스처럼 체인 밖에 있는 상점을 식별한다. 수취인과는 별개 층이다.
+    ///      정산 파트너 한 곳만 수취인으로 두면 "어디에 쓸지" 통제가 사라지므로,
+    ///      가맹점 단위 허용을 컨트랙트가 따로 강제한다.
+    ///      해시는 keccak256(bytes(가맹점 식별자))이며 merchantId()로 계산할 수 있다.
+    mapping(bytes32 => mapping(bytes32 => bool)) public allowedMerchant;
+
+    /// @notice delegationId => 가맹점 정책 사용 여부. false면 가맹점 검사를 하지 않는다.
+    mapping(bytes32 => bool) public merchantPolicyOn;
 
     uint256 private _locked = 1;
 
@@ -55,6 +66,9 @@ contract DelegationVault {
 
     event RecipientSet(bytes32 indexed id, address indexed recipient, bool allowed);
 
+    event MerchantSet(bytes32 indexed id, bytes32 indexed merchant, bool allowed);
+    event MerchantPolicySet(bytes32 indexed id, bool enabled);
+
     event DelegationRevoked(
         bytes32 indexed id, address indexed principal, address indexed agent, uint128 totalSpent
     );
@@ -65,7 +79,8 @@ contract DelegationVault {
         address indexed recipient,
         address principal,
         uint256 amount,
-        string memo
+        string memo,
+        bytes32 merchant
     );
 
     /* ─────────────────────────  에러  ───────────────────────── */
@@ -84,6 +99,7 @@ contract DelegationVault {
     error DailyLimitExceeded(uint128 remaining, uint256 requested);
     error TotalCapExceeded(uint128 remaining, uint256 requested);
     error RecipientNotAllowed(address recipient);
+    error MerchantNotAllowed(bytes32 merchant);
     error InsufficientBalance(uint256 available, uint256 requested);
     error TransferFailed();
 
@@ -192,6 +208,34 @@ contract DelegationVault {
         }
     }
 
+    /// @notice 가맹점 정책을 켜거나 끈다. 켜면 spendAt()으로 가맹점을 명시해야 한다.
+    function setMerchantPolicy(address agent, bool enabled) external {
+        Delegation storage d = _delegations[msg.sender][agent];
+        if (d.expiry == 0) revert NoDelegation();
+
+        bytes32 id = _currentId(msg.sender, agent);
+        merchantPolicyOn[id] = enabled;
+        emit MerchantPolicySet(id, enabled);
+    }
+
+    /// @notice 허용 가맹점을 추가하거나 제거한다.
+    /// @param merchants merchantId()로 계산한 해시 목록
+    function setMerchants(address agent, bytes32[] calldata merchants, bool allowed) external {
+        Delegation storage d = _delegations[msg.sender][agent];
+        if (d.expiry == 0) revert NoDelegation();
+
+        bytes32 id = _currentId(msg.sender, agent);
+        for (uint256 i = 0; i < merchants.length; i++) {
+            allowedMerchant[id][merchants[i]] = allowed;
+            emit MerchantSet(id, merchants[i], allowed);
+        }
+    }
+
+    /// @notice 가맹점 식별자를 해시로 바꾼다. 오프체인에서도 같은 방식으로 계산할 수 있다.
+    function merchantId(string calldata name) external pure returns (bytes32) {
+        return keccak256(bytes(name));
+    }
+
     /// @notice 위임을 즉시 회수한다. 이 트랜잭션이 확정되는 순간부터 에이전트는 한 푼도 쓸 수 없다.
     function revoke(address agent) external {
         Delegation storage d = _delegations[msg.sender][agent];
@@ -213,6 +257,33 @@ contract DelegationVault {
         external
         nonReentrant
     {
+        // 가맹점 정책이 켜져 있으면 가맹점을 명시하는 spendAt()을 써야 한다.
+        // 이 검사는 _spend 안에서 하면 다른 에러에 가려지므로 여기서 하지 않고,
+        // 정책이 켜진 경우 merchant가 0이라 allowedMerchant 검사에서 자연히 걸린다.
+        _spend(principal, recipient, amount, memo, bytes32(0));
+    }
+
+    /// @notice 가맹점을 명시해 결제한다. 정산 파트너 경로에서 쓴다.
+    /// @param merchant 가맹점 해시. merchantId("coupang") 처럼 계산한다.
+    /// @dev recipient(자금을 받는 주소)와 merchant(구매한 상점)는 다른 층이다.
+    ///      파트너가 대납하는 경우 recipient는 파트너이고 merchant는 쿠팡이 된다.
+    function spendAt(
+        address principal,
+        address recipient,
+        uint256 amount,
+        string calldata memo,
+        bytes32 merchant
+    ) external nonReentrant {
+        _spend(principal, recipient, amount, memo, merchant);
+    }
+
+    function _spend(
+        address principal,
+        address recipient,
+        uint256 amount,
+        string calldata memo,
+        bytes32 merchant
+    ) private {
         if (recipient == address(0)) revert ZeroAddress();
         // 금고 자신을 수취인으로 지정하면 receive()가 deposit()을 호출해
         // 그 금액이 금고 명의로 credit된다. 금고 주소에는 개인키가 없어 영구 회수 불가다.
@@ -226,6 +297,34 @@ contract DelegationVault {
         if (!d.active) revert DelegationInactive();
         if (block.timestamp >= d.expiry) revert DelegationExpired(d.expiry, block.timestamp);
 
+        // 한도 검사와 사용액 갱신은 별도 함수로 뺀다.
+        // 여기서 다 하면 스택이 넘쳐 컴파일되지 않는다 (Stack too deep).
+        _applyLimits(d, amount);
+
+        bytes32 id = _currentId(principal, msg.sender);
+        if (d.whitelistOnly && !allowedRecipient[id][recipient]) {
+            revert RecipientNotAllowed(recipient);
+        }
+        // 가맹점 정책이 켜져 있으면 상점 단위 허용도 함께 검사한다.
+        if (merchantPolicyOn[id] && !allowedMerchant[id][merchant]) {
+            revert MerchantNotAllowed(merchant);
+        }
+
+        uint256 bal = balanceOf[principal];
+        if (bal < amount) revert InsufficientBalance(bal, amount);
+        unchecked {
+            balanceOf[principal] = bal - amount;
+        }
+
+        emit Spent(id, msg.sender, recipient, principal, amount, memo, merchant);
+
+        (bool ok,) = payable(recipient).call{value: amount}("");
+        if (!ok) revert TransferFailed();
+    }
+
+    /// @dev 건당·일일·총 한도를 검사하고 사용액을 갱신한다.
+    ///      _spend에서 분리한 이유는 스택 깊이 제한 때문이다.
+    function _applyLimits(Delegation storage d, uint256 amount) private {
         if (amount > d.perTxLimit) revert PerTxLimitExceeded(d.perTxLimit, amount);
 
         // 날짜가 바뀌었으면 일일 사용액을 리셋한다.
@@ -238,26 +337,11 @@ contract DelegationVault {
         uint128 totalLeft = d.totalCap - d.totalSpent;
         if (amount > totalLeft) revert TotalCapExceeded(totalLeft, amount);
 
-        bytes32 id = _currentId(principal, msg.sender);
-        if (d.whitelistOnly && !allowedRecipient[id][recipient]) {
-            revert RecipientNotAllowed(recipient);
-        }
-
-        uint256 bal = balanceOf[principal];
-        if (bal < amount) revert InsufficientBalance(bal, amount);
-
-        // 상태를 먼저 갱신하고 나서 송금한다.
         unchecked {
-            balanceOf[principal] = bal - amount;
             d.spentToday = spentToday + uint128(amount);
             d.totalSpent = d.totalSpent + uint128(amount);
         }
         d.dayIndex = today;
-
-        emit Spent(id, msg.sender, recipient, principal, amount, memo);
-
-        (bool ok,) = payable(recipient).call{value: amount}("");
-        if (!ok) revert TransferFailed();
     }
 
     /* ─────────────────────────  조회  ───────────────────────── */
@@ -315,6 +399,45 @@ contract DelegationVault {
 
         if (d.whitelistOnly && !allowedRecipient[_currentId(principal, agent)][recipient]) {
             return (false, "RECIPIENT_NOT_ALLOWED");
+        }
+        // 가맹점 정책이 켜져 있으면 canSpendAt()으로 가맹점까지 넘겨 조회해야 한다.
+        if (merchantPolicyOn[_currentId(principal, agent)]) return (false, "MERCHANT_REQUIRED");
+        if (balanceOf[principal] < amount) return (false, "INSUFFICIENT_BALANCE");
+
+        return (true, "");
+    }
+
+    /// @notice 가맹점을 포함해 결제 가능 여부를 조회한다.
+    ///         정산 파트너(PG)가 승인 판단에 호출하는 함수다.
+    ///         상태를 바꾸지 않으므로 승인 요청 처리 중에 자유롭게 부를 수 있다.
+    function canSpendAt(
+        address principal,
+        address agent,
+        address recipient,
+        uint256 amount,
+        bytes32 merchant
+    ) external view returns (bool ok, string memory reason) {
+        Delegation storage d = _delegations[principal][agent];
+
+        if (d.expiry == 0) return (false, "NO_DELEGATION");
+        if (!d.active) return (false, "REVOKED");
+        if (block.timestamp >= d.expiry) return (false, "EXPIRED");
+        if (recipient == address(this)) return (false, "SELF_RECIPIENT");
+        if (amount == 0) return (false, "ZERO_AMOUNT");
+        if (amount > type(uint128).max) return (false, "AMOUNT_TOO_LARGE");
+        if (amount > d.perTxLimit) return (false, "PER_TX_LIMIT");
+
+        uint128 spentToday =
+            d.dayIndex == uint64(block.timestamp / 1 days) ? d.spentToday : 0;
+        if (amount > d.dailyLimit - spentToday) return (false, "DAILY_LIMIT");
+        if (amount > d.totalCap - d.totalSpent) return (false, "TOTAL_CAP");
+
+        bytes32 id = _currentId(principal, agent);
+        if (d.whitelistOnly && !allowedRecipient[id][recipient]) {
+            return (false, "RECIPIENT_NOT_ALLOWED");
+        }
+        if (merchantPolicyOn[id] && !allowedMerchant[id][merchant]) {
+            return (false, "MERCHANT_NOT_ALLOWED");
         }
         if (balanceOf[principal] < amount) return (false, "INSUFFICIENT_BALANCE");
 
