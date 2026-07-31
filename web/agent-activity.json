@@ -43,6 +43,36 @@
       "planId": "T-1",
       "planTitle": "구독 서비스 자동 갱신",
       "rail": "settled"
+    },
+    {
+      "at": 1785465897425,
+      "merchant": "넷플릭스 구독",
+      "amount": "0.0000011",
+      "status": "paid",
+      "txHash": "0x0422cd4eb9adbbe1e79acf0515fa9b98458adbf75dcaba3e9e91cd2039ebec4f",
+      "planId": "T-1",
+      "planTitle": "구독 서비스 자동 갱신",
+      "rail": "settled"
+    },
+    {
+      "at": 1785465946750,
+      "merchant": "도메인 갱신",
+      "amount": "0.00000137",
+      "status": "paid",
+      "txHash": "0x91bb7b1941549debe5ae36393aeefe8639e9db18b52f65c3c38aff4a6318958a",
+      "planId": "T-2",
+      "planTitle": "개발 인프라 사용료 정산",
+      "rail": "onchain"
+    },
+    {
+      "at": 1785465996071,
+      "merchant": "AWS 사용료",
+      "amount": "0.00000162",
+      "status": "paid",
+      "txHash": "0x10a19ce7cc90f5862f1677adf17d86f29d171c6807b53f29f50dd68124fe9272",
+      "planId": "T-2",
+      "planTitle": "개발 인프라 사용료 정산",
+      "rail": "onchain"
     }
   ],
   "running": true,
@@ -50,9 +80,9 @@
   "principal": "0x538F0C6c18014D3C31af08f0e25D8404D893A66F",
   "contract": "0x44a3E444494D147b4c64b89aBFb1279c3cC4171e",
   "intervalSec": 45,
-  "remainingToday": "0.0",
-  "remainingTotal": "0.0",
-  "updatedAt": "2026-07-31T02:44:08.078Z",
+  "remainingToday": "0.00001591",
+  "remainingTotal": "0.00019591",
+  "updatedAt": "2026-07-31T02:46:36.104Z",
   "plan": [
     {
       "id": "T-1",
