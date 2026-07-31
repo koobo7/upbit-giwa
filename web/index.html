@@ -146,11 +146,11 @@
 
   <section class="card">
     <h2>1. 위임장 발급</h2>
-    <label style="display:flex;align-items:center;gap:8px">
-      <span>에이전트 지갑</span>
+    <label style="display:flex;align-items:center;gap:8px;flex-wrap:nowrap">
+      <span style="white-space:nowrap">에이전트 지갑</span>
       <span class="spacer" style="flex:1"></span>
       <button class="ghost" id="btnManageAgent" type="button"
-              style="padding:2px 9px;font-size:11px;font-weight:400">지갑 선택</button>
+              style="padding:2px 9px;font-size:11px;font-weight:400;white-space:nowrap;flex:none">지갑 선택</button>
     </label>
     <div id="agentPick" class="mono" style="background:#0b0e12;border:1px solid var(--line);
          border-radius:8px;padding:9px 11px;font-size:13px;min-height:38px;
@@ -164,12 +164,11 @@
       <div><label>총 한도 (ETH)</label><input id="total" value="5" /></div>
       <div><label>유효 기간 (일)</label><input id="days" value="30" /></div>
     </div>
-    <label style="display:flex;align-items:center;gap:8px">
-      <span>허용 수취인 (쉼표로 구분, 비우면 제한 없음)
-        <span class="dim" style="font-weight:400">· 마지막 입력값 자동 채움</span></span>
+    <label style="display:flex;align-items:center;gap:8px;flex-wrap:nowrap">
+      <span style="white-space:nowrap">허용 수취인 <span class="dim" style="font-weight:400">(비우면 제한 없음)</span></span>
       <span class="spacer" style="flex:1"></span>
       <button class="ghost" id="btnManageRecip" type="button"
-              style="padding:2px 9px;font-size:11px;font-weight:400">수취인 관리</button>
+              style="padding:2px 9px;font-size:11px;font-weight:400;white-space:nowrap;flex:none">수취인 관리</button>
     </label>
     <div id="recipPick" style="background:#0b0e12;border:1px solid var(--line);border-radius:8px;
          padding:9px 11px;min-height:38px;display:flex;align-items:center;gap:6px;
@@ -673,7 +672,9 @@ async function openAgentPickDialog() {
     <h2 style="margin:0 0 4px">에이전트 지갑 선택</h2>
     <div class="dim" style="font-size:11px;margin-bottom:12px">
       위임은 <b>에이전트 주소마다 따로</b> 발급됩니다. 한 지갑을 여러 에이전트가 쓰면
-      한도가 섞이고 개별 회수도 할 수 없습니다.</div>
+      한도가 섞이고 개별 회수도 할 수 없습니다.<br>
+      여러 에이전트에게 권한을 주려면 <b>하나씩 선택해 각각 발급</b>하세요.
+      한도와 회수가 에이전트별로 독립됩니다.</div>
     <div style="max-height:40vh;overflow:auto">${rows.join("")}</div>
     <label style="margin-top:14px">직접 입력
       <span class="dim" style="font-weight:400">· 에이전트가 만든 지갑 주소</span></label>
@@ -865,7 +866,9 @@ function renderAgents() {
     return;
   }
   $("agentsBody").innerHTML = list.map((g, i) => `
-    <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #1b2027;flex-wrap:wrap">
+    <div data-detail="${i}" title="클릭하면 상세 정보"
+         style="display:flex;align-items:center;gap:12px;padding:10px 8px;border-bottom:1px solid #1b2027;
+                flex-wrap:wrap;cursor:pointer;border-radius:8px">
       <div style="width:34px;height:34px;border-radius:9px;background:#0b0e12;border:1px solid var(--line);
                   display:flex;align-items:center;justify-content:center;font-size:16px">${g.icon || "○"}</div>
       <div style="min-width:150px">
@@ -882,13 +885,113 @@ function renderAgents() {
     </div>`).join("");
 
   $("agentsBody").querySelectorAll("[data-del]").forEach(b => {
-    b.onclick = () => {
+    b.onclick = (ev) => {
+      ev.stopPropagation();   // 상세 팝업이 함께 열리지 않도록
       const v = loadAgents();
       v.splice(Number(b.dataset.del), 1);
       saveAgents(v);
       renderAgents();
     };
   });
+  $("agentsBody").querySelectorAll("[data-detail]").forEach(el => {
+    el.onclick = () => openAgentDetail(Number(el.dataset.detail));
+  });
+}
+
+/** 연동된 에이전트 상세 — 지갑 정보 확인, 별명 변경, 연동 해제. */
+async function openAgentDetail(idx) {
+  const list = loadAgents();
+  const g = list[idx];
+  if (!g) return;
+
+  // 지갑이 지정돼 있으면 온체인 상태를 함께 보여준다.
+  let onchain = `<span class="dim">지갑이 지정되지 않았습니다.</span>`;
+  if (g.wallet && ethers.isAddress(g.wallet)) {
+    try {
+      const rp = provider ?? readProvider();
+      const gas = await rp.getBalance(g.wallet);
+      let deleg = `<span class="badge dim">위임 없음</span>`;
+      if (vault && me) {
+        const d = await vault.getDelegation(me, g.wallet);
+        if (d.expiry !== 0n) {
+          const expired = BigInt(Math.floor(Date.now() / 1000)) >= d.expiry;
+          deleg = !d.active ? `<span class="badge no">회수됨</span>`
+                : expired ? `<span class="badge no">만료</span>`
+                : `<span class="badge ok">활성</span> <span class="dim">건당 ${F(d.perTxLimit)} ETH</span>`;
+        }
+      }
+      onchain = `
+        <div style="display:flex;justify-content:space-between;padding:5px 0">
+          <span class="dim">위임 상태</span><span>${deleg}</span></div>
+        <div style="display:flex;justify-content:space-between;padding:5px 0">
+          <span class="dim">가스 잔액</span><span class="${gas === 0n ? "no" : "ok"}">${F(gas)} ETH</span></div>
+        <div style="display:flex;justify-content:space-between;padding:5px 0;gap:10px">
+          <span class="dim">익스플로러</span>
+          <a class="dim" target="_blank" href="${GIWA.explorer}/address/${g.wallet}">열기</a></div>`;
+    } catch {
+      onchain = `<span class="dim">온체인 정보를 읽지 못했습니다.</span>`;
+    }
+  }
+
+  $("dlgBody").innerHTML = `
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+      <div style="width:40px;height:40px;border-radius:11px;background:#0b0e12;border:1px solid var(--line);
+                  display:flex;align-items:center;justify-content:center;font-size:19px">${g.icon || "○"}</div>
+      <div>
+        <h2 style="margin:0">${g.nickname || g.name}</h2>
+        <div class="dim" style="font-size:11px">${g.name}${g.vendor ? " · " + g.vendor : ""}</div>
+      </div>
+    </div>
+
+    <div style="border-top:1px solid var(--line);padding-top:10px;font-size:12px">
+      <div style="display:flex;justify-content:space-between;padding:5px 0;gap:10px">
+        <span class="dim">라우팅 주소</span>
+        <span class="mono" style="word-break:break-all">${g.endpoint || "-"}</span></div>
+      <div style="display:flex;justify-content:space-between;padding:5px 0;gap:10px">
+        <span class="dim">지갑 주소</span>
+        <span class="mono" style="word-break:break-all">${g.wallet || "-"}</span></div>
+      ${onchain}
+      <div style="display:flex;justify-content:space-between;padding:5px 0">
+        <span class="dim">연동 시각</span>
+        <span>${g.addedAt ? new Date(g.addedAt).toLocaleString("ko-KR") : "-"}</span></div>
+    </div>
+
+    <label style="margin-top:14px">별명</label>
+    <input id="adNick" value="${g.nickname || ""}" placeholder="${g.name}" />
+
+    <label>지갑 주소</label>
+    <input id="adWallet" class="mono" value="${g.wallet || ""}" placeholder="0x…" />
+
+    <div class="row">
+      <button id="adSave">저장</button>
+      <button class="ghost" id="adClose">닫기</button>
+      <span class="spacer" style="flex:1"></span>
+      <button class="danger" id="adRemove">연동 해제</button>
+    </div>
+    <div class="dim" id="adMsg" style="font-size:11px;margin-top:8px"></div>`;
+  $("dlg").style.display = "flex";
+
+  $("adSave").onclick = () => {
+    const w = $("adWallet").value.trim();
+    if (w && !ethers.isAddress(w)) {
+      $("adMsg").innerHTML = `<span class="no">지갑 주소 형식이 올바르지 않습니다.</span>`;
+      return;
+    }
+    const v = loadAgents();
+    v[idx] = { ...v[idx], nickname: $("adNick").value.trim(), wallet: w };
+    saveAgents(v);
+    $("dlg").style.display = "none";
+    renderAgents();
+  };
+  $("adRemove").onclick = () => {
+    if (!confirm(`'${g.nickname || g.name}' 연동을 해제할까요?\n\n온체인 위임은 그대로 남습니다. 권한을 끊으려면 [즉시 회수]를 쓰세요.`)) return;
+    const v = loadAgents();
+    v.splice(idx, 1);
+    saveAgents(v);
+    $("dlg").style.display = "none";
+    renderAgents();
+  };
+  $("adClose").onclick = () => { $("dlg").style.display = "none"; };
 }
 
 async function openAgentDialog() {
