@@ -871,6 +871,15 @@ async function openAgentDialog() {
   let pageSize = Number(localStorage.getItem("ingam.livePageSize")) || 20;
   let lastData = null;
 
+  // 제어 관련 알림은 팝업 대신 헤더 옆에 잠깐 표시한다.
+  const note = (msg) => {
+    const el = $("liveMeta");
+    if (!el) return;
+    const prev = el.textContent;
+    el.innerHTML = `<span class="no">${msg}</span>`;
+    setTimeout(() => { if (el.textContent === msg) el.textContent = prev; }, 6000);
+  };
+
   const paint = (running) => {
     ctlRunning = running;
     btn.textContent = running ? "■" : "▶";
@@ -908,22 +917,19 @@ async function openAgentDialog() {
       const next = await ctl(cur.running ? "stop" : "start");
       paint(next.running);
       // 시작 직후 프로세스가 살아있는지 확인한다. 의존 파일이 없으면 즉시 죽는다.
+      // 팝업 대신 카드 안에 조용히 표시한다 — 방문자에게 alert를 띄우지 않는다.
       if (!cur.running) {
         setTimeout(async () => {
           try {
             const s = await ctl("status");
             paint(s.running);
-            if (!s.running) {
-              alert("에이전트가 시작 직후 종료되었습니다.\n\n" +
-                    "이 서버에 실행 준비가 되어 있지 않을 수 있습니다.\n" +
-                    "npm install · npm run build · demo-wallets.json 을 확인하세요.");
-            }
+            if (!s.running) note("에이전트가 시작 직후 종료되었습니다. 이 서버에는 실행 준비가 되어 있지 않습니다.");
           } catch {}
         }, 2500);
       }
       setTimeout(tick, 1200);
     } catch {
-      alert("에이전트 제어에 실패했습니다. 로컬에서 npm run web 으로 실행 중인지 확인하세요.");
+      note("에이전트 제어를 사용할 수 없습니다. 로컬에서 npm run web 으로 실행하세요.");
     } finally {
       btn.disabled = false;
     }

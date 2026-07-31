@@ -82,9 +82,12 @@ http.createServer((req, res) => {
     file = path.join(ROOT, 'index.html');
   }
 
+  // 캐시를 완전히 막는다. 강제 새로고침 없이도 최신 코드가 뜨도록 한다.
   res.writeHead(200, {
     'Content-Type': MIME[path.extname(file)] || 'application/octet-stream',
-    'Cache-Control': 'no-store',
+    'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+    'Pragma': 'no-cache',
+    'Expires': '0',
   });
   res.end(fs.readFileSync(file));
 }).listen(PORT, () => {
