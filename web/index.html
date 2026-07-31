@@ -128,6 +128,8 @@
               style="padding:2px 10px;font-size:13px;line-height:1.4;text-transform:none;letter-spacing:0">▶</button>
       <span class="spacer" style="flex:1"></span>
       <span class="dim" id="liveMeta" style="font-size:11px;text-transform:none;letter-spacing:0"></span>
+      <button class="ghost" id="btnLiveAll"
+              style="padding:3px 11px;font-size:11px;text-transform:none;letter-spacing:0">전체보기</button>
     </h2>
     <div id="liveBody"></div>
   </section>
@@ -630,9 +632,13 @@ async function openAgentDialog() {
       if (!r.ok) return;
       a = await r.json();
     } catch { return; }
+    lastData = a;
+    render(a);
+  }
+
+  function render(a) {
     if (a?.events?.length) $("liveCard").style.display = "";
     if (!a?.events?.length) return;
-    // 카드는 initCtl에서 이미 보이게 했으므로 여기서는 내용만 채운다.
 
     // 마지막 기록이 오래됐으면 멈춘 것으로 본다.
     // 로컬 제어 API가 있으면 실제 프로세스 상태를 우선한다 (파일보다 정확하다).
@@ -658,7 +664,14 @@ async function openAgentDialog() {
       ? `<span class="badge" style="color:var(--blue)" title="이 가맹점은 암호화폐를 직접 받지 않아 정산 파트너가 대납합니다">정산</span>`
       : `<span class="badge" style="color:var(--accent)" title="수취인이 온체인으로 직접 정산합니다">온체인</span>`;
 
-    const rows = a.events.slice().reverse().slice(0, 12).map(e => `
+    const all = a.events.slice().reverse();
+    const totalPages = Math.max(1, Math.ceil(all.length / pageSize));
+    if (page > totalPages) page = totalPages;
+    const shown = expanded
+      ? all.slice((page - 1) * pageSize, page * pageSize)
+      : all.slice(0, 12);
+
+    const rows = shown.map(e => `
       <tr>
         <td class="dim" style="white-space:nowrap">${ago(e.at)}</td>
         <td style="white-space:nowrap">${who}</td>
@@ -699,6 +712,28 @@ async function openAgentDialog() {
           <tbody>${rows}</tbody>
         </table>
       </div>
+      ${expanded ? `
+        <div class="row" style="align-items:center;margin-top:12px">
+          <button class="ghost" id="pgFirst" ${page === 1 ? "disabled" : ""}
+                  style="padding:4px 10px;font-size:11px">«</button>
+          <button class="ghost" id="pgPrev" ${page === 1 ? "disabled" : ""}
+                  style="padding:4px 10px;font-size:11px">이전</button>
+          <span class="dim" style="font-size:12px">
+            ${page} / ${totalPages} 쪽 · 전체 ${all.length}건</span>
+          <button class="ghost" id="pgNext" ${page === totalPages ? "disabled" : ""}
+                  style="padding:4px 10px;font-size:11px">다음</button>
+          <button class="ghost" id="pgLast" ${page === totalPages ? "disabled" : ""}
+                  style="padding:4px 10px;font-size:11px">»</button>
+          <span class="spacer" style="flex:1"></span>
+          <label style="margin:0;display:flex;align-items:center;gap:6px;font-size:11px">쪽당
+            <select id="pgSize" style="width:auto;padding:4px 8px;font-size:11px">
+              ${[10, 20, 50, 100].map(n =>
+                `<option value="${n}" ${n === pageSize ? "selected" : ""}>${n}</option>`).join("")}
+            </select>
+          </label>
+        </div>` : (all.length > 12 ? `
+        <div class="dim" style="font-size:11px;margin-top:10px">
+          최근 12건만 표시 중 · 전체 ${all.length}건은 <b>전체보기</b>에서 확인하세요.</div>` : "")}
       <div class="note">
         <b>경로</b> — <span style="color:var(--accent)">온체인</span>은 수취인이 직접 정산하는 경우이고,
         <span style="color:var(--blue)">정산</span>은 쿠팡·넷플릭스처럼 암호화폐를 받지 않는 곳입니다.
@@ -706,6 +741,19 @@ async function openAgentDialog() {
         <span class="mono">canSpend()</span>를 조회해 한도를 확인합니다.
         <b>가맹점이 체인을 몰라도 한도는 온체인에서 강제됩니다.</b>
       </div>`;
+
+    // 페이지 이동. 다시 그릴 때마다 새로 바인딩한다.
+    const go = (p) => { page = Math.min(Math.max(1, p), totalPages); render(lastData); };
+    $("pgFirst") && ($("pgFirst").onclick = () => go(1));
+    $("pgPrev")  && ($("pgPrev").onclick  = () => go(page - 1));
+    $("pgNext")  && ($("pgNext").onclick  = () => go(page + 1));
+    $("pgLast")  && ($("pgLast").onclick  = () => go(totalPages));
+    $("pgSize")  && ($("pgSize").onchange = (ev) => {
+      pageSize = Number(ev.target.value);
+      localStorage.setItem("ingam.livePageSize", String(pageSize));
+      page = 1;
+      render(lastData);
+    });
   }
 
   /* 데몬 시작·정지 버튼.
@@ -713,6 +761,12 @@ async function openAgentDialog() {
   const btn = $("btnDaemon");
   let ctlAvailable = false;
   let ctlRunning = false;
+
+  // 전체보기 상태. 접힌 상태에서는 최근 12건만 보여준다.
+  let expanded = localStorage.getItem("ingam.liveAll") === "1";
+  let page = 1;
+  let pageSize = Number(localStorage.getItem("ingam.livePageSize")) || 20;
+  let lastData = null;
 
   const paint = (running) => {
     ctlRunning = running;
@@ -766,6 +820,18 @@ async function openAgentDialog() {
     } finally {
       btn.disabled = false;
     }
+  };
+
+  // 전체보기 ↔ 접기 토글
+  const allBtn = $("btnLiveAll");
+  const paintAll = () => { allBtn.textContent = expanded ? "접기" : "전체보기"; };
+  paintAll();
+  allBtn.onclick = () => {
+    expanded = !expanded;
+    page = 1;
+    localStorage.setItem("ingam.liveAll", expanded ? "1" : "0");
+    paintAll();
+    if (lastData) render(lastData);
   };
 
   tick();

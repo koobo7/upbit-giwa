@@ -84,7 +84,8 @@ function readActivity() {
 function writeActivity(patch) {
   const cur = readActivity();
   const next = { ...cur, ...patch, updatedAt: new Date().toISOString() };
-  next.events = (patch.events ?? cur.events ?? []).slice(-40);
+  // 대시보드 전체보기에서 페이지를 넘겨볼 수 있도록 넉넉히 남긴다.
+  next.events = (patch.events ?? cur.events ?? []).slice(-500);
   fs.writeFileSync(ACTIVITY, JSON.stringify(next, null, 2));
 }
 
