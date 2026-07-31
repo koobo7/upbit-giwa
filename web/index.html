@@ -1107,11 +1107,15 @@ async function openAgentDialog() {
     const paid = a.events.filter(e => e.status === "paid").length;
     const blocked = a.events.filter(e => e.status === "blocked").length;
 
-    // 이 지갑으로 등록된 에이전트가 있으면 그 아이콘·별명을 쓴다.
-    const linked = loadAgents().find(g => !g.wallet || g.wallet.toLowerCase() === (a.agent || "").toLowerCase());
-    const who = linked
-      ? `<span title="${linked.name}">${linked.icon} ${linked.nickname || linked.name}</span>`
-      : `<span class="dim" title="${a.agent || ""}">○ 미등록 에이전트</span>`;
+    // 각 결제가 어느 에이전트에서 나왔는지는 기록에 남아 있다.
+    // 없으면(구버전 기록) 활동 파일의 대표 주소로 추정한다.
+    const whoOf = (e) => {
+      const addr = e.agentAddress || a.agent;
+      const known = labelOfAgent?.(addr);
+      if (known) return `<span title="${addr}">${known.icon} ${e.agentLabel || known.label}</span>`;
+      if (e.agentLabel) return `<span title="${addr || ""}">◆ ${e.agentLabel}</span>`;
+      return `<span class="dim" title="${addr || ""}">○ 미등록</span>`;
+    };
 
     const railBadge = (r) => r === "settled"
       ? `<span class="badge" style="color:var(--blue)" title="이 가맹점은 암호화폐를 직접 받지 않아 정산 파트너가 대납합니다">정산</span>`
@@ -1128,7 +1132,7 @@ async function openAgentDialog() {
     const rows = shown.map(e => `
       <tr>
         <td class="dim" style="white-space:nowrap">${ago(e.at)}</td>
-        <td style="white-space:nowrap">${who}</td>
+        <td style="white-space:nowrap">${whoOf(e)}</td>
         <td>${e.anomaly ? `<span class="no" title="계획에 없는 시도">⚠ </span>` : ""}${e.merchant}
           ${e.planId ? `<div class="dim" style="font-size:10px">${e.planId} · ${e.planTitle}${
             e.anomaly === "recipient" ? " · 허용되지 않은 수취처"

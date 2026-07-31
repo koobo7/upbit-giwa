@@ -30,14 +30,31 @@ const provider = new ethers.JsonRpcProvider(
   deployed.rpc, { chainId: deployed.chainId, name: 'giwa-sepolia' }, { staticNetwork: true }
 );
 
-function loadAgentKey() {
-  if (process.env.AGENT_KEY) return process.env.AGENT_KEY;
-  const f = path.join(ROOT, 'demo-wallets.json');
-  if (!fs.existsSync(f)) {
+/** 위임이 살아 있는 에이전트를 전부 모은다.
+ *  실제 환경에서는 여러 에이전트가 각자의 지갑으로 동시에 움직이므로,
+ *  데모도 하나가 아니라 여러 에이전트를 번갈아 굴린다. */
+function loadAgentKeys() {
+  if (process.env.AGENT_KEY) return [{ label: '에이전트', key: process.env.AGENT_KEY }];
+
+  const wf = path.join(ROOT, 'demo-wallets.json');
+  if (!fs.existsSync(wf)) {
     console.error('demo-wallets.json이 없습니다. AGENT_KEY 환경변수로 넘기세요.');
     process.exit(1);
   }
-  return JSON.parse(fs.readFileSync(f, 'utf8'))[0].privateKey;
+  const wallets = JSON.parse(fs.readFileSync(wf, 'utf8'));
+
+  // 공개 목록(demo-agents.json)에 있는 주소만 에이전트로 취급한다.
+  // 나머지 항목은 수취인 지갑이라 결제 주체가 아니다.
+  const af = path.join(ROOT, 'web', 'demo-agents.json');
+  if (!fs.existsSync(af)) return [{ label: '에이전트', key: wallets[0].privateKey }];
+  const agents = JSON.parse(fs.readFileSync(af, 'utf8'));
+
+  const out = [];
+  for (const a of agents) {
+    const w = wallets.find((x) => x.address.toLowerCase() === a.address.toLowerCase());
+    if (w) out.push({ label: a.label, key: w.privateKey });
+  }
+  return out.length ? out : [{ label: '에이전트', key: wallets[0].privateKey }];
 }
 
 function loadMerchants() {
@@ -91,23 +108,36 @@ function writeActivity(patch) {
 }
 
 async function main() {
-  const wallet = new ethers.Wallet(loadAgentKey(), provider);
-  const vault = new ethers.Contract(deployed.address, artifact.abi, wallet);
   const merchants = loadMerchants();
+
+  // 위임이 살아 있는 에이전트만 실제로 굴린다.
+  const candidates = loadAgentKeys().map((a) => ({
+    ...a, wallet: new ethers.Wallet(a.key, provider),
+  }));
 
   console.log('INGAM 자율 결제 에이전트');
   console.log(`  컨트랙트  ${deployed.address}`);
   console.log(`  위임자    ${PRINCIPAL}`);
-  console.log(`  에이전트  ${wallet.address}`);
   console.log(`  결제 간격  ${INTERVAL / 1000}초\n`);
 
-  const d = await vault.getDelegation(PRINCIPAL, wallet.address);
-  if (d.expiry === 0n) {
-    console.error('위임이 없습니다. 대시보드에서 이 에이전트에게 먼저 위임장을 발급하세요.');
-    console.error(`  에이전트 주소: ${wallet.address}`);
+  const actors = [];
+  for (const c of candidates) {
+    const vault = new ethers.Contract(deployed.address, artifact.abi, c.wallet);
+    const d = await vault.getDelegation(PRINCIPAL, c.wallet.address);
+    const gas = await provider.getBalance(c.wallet.address);
+    const ok = d.expiry !== 0n && d.active && gas > 0n;
+    console.log(`  ${ok ? '▶' : '·'} ${c.label.padEnd(6)} ${c.wallet.address}` +
+      `  ${d.expiry === 0n ? '위임 없음' : !d.active ? '회수됨' : gas === 0n ? '가스 없음' : '활성'}`);
+    if (ok) actors.push({ label: c.label, wallet: c.wallet, vault });
+  }
+  console.log();
+
+  if (!actors.length) {
+    console.error('결제 가능한 에이전트가 없습니다. 위임 발급과 가스비를 확인하세요.');
     process.exit(1);
   }
 
+  let turn = 0;
   let running = true;
   process.on('SIGINT', () => {
     running = false;
@@ -117,6 +147,11 @@ async function main() {
   });
 
   while (running) {
+    // 에이전트를 번갈아 쓴다. 각자 다른 지갑이라 한도도 따로 소모된다.
+    const actor = actors[turn % actors.length];
+    turn++;
+    const { wallet, vault } = actor;
+
     let m = merchants[Math.floor(Math.random() * merchants.length)];
     const [memoBase, base, rail] = CATALOG[m.name] ?? ['자동 결제', 0.000000006, 'onchain'];
     const plan = planOf(m.name);
@@ -158,18 +193,18 @@ async function main() {
       const [ok, reason] = await vault.canSpendAt(
         PRINCIPAL, wallet.address, m.address, amount, merchantHash);
       if (!ok) {
-        console.log(`${ts()}  차단  ${m.name.padEnd(18)} ${fmt(amount)} ETH  <- ${reason}`);
-        entry = { at: Date.now(), merchant: m.name, amount: fmt(amount), status: 'blocked', reason, planId: plan.id, planTitle: plan.title, rail, anomaly };
+        console.log(`${ts()}  [${actor.label}] 차단  ${m.name.padEnd(18)} ${fmt(amount)} ETH  <- ${reason}`);
+        entry = { at: Date.now(), merchant: m.name, amount: fmt(amount), status: 'blocked', reason, planId: plan.id, planTitle: plan.title, rail, anomaly, agentLabel: actor.label, agentAddress: wallet.address };
       } else {
         const tx = await vault.spendAt(PRINCIPAL, m.address, amount, memo, merchantHash);
         await tx.wait();
-        console.log(`${ts()}  결제  ${m.name.padEnd(18)} ${fmt(amount)} ETH  ${tx.hash.slice(0, 14)}…`);
-        entry = { at: Date.now(), merchant: m.name, amount: fmt(amount), status: 'paid', txHash: tx.hash, planId: plan.id, planTitle: plan.title, rail, anomaly };
+        console.log(`${ts()}  [${actor.label}] 결제  ${m.name.padEnd(18)} ${fmt(amount)} ETH  ${tx.hash.slice(0, 14)}…`);
+        entry = { at: Date.now(), merchant: m.name, amount: fmt(amount), status: 'paid', txHash: tx.hash, planId: plan.id, planTitle: plan.title, rail, anomaly, agentLabel: actor.label, agentAddress: wallet.address };
       }
     } catch (e) {
       const reason = e.revert?.name ?? e.shortMessage ?? String(e);
-      console.log(`${ts()}  차단  ${m.name.padEnd(18)} ${fmt(amount)} ETH  <- ${reason}`);
-      entry = { at: Date.now(), merchant: m.name, amount: fmt(amount), status: 'blocked', reason, planId: plan.id, planTitle: plan.title, rail, anomaly };
+      console.log(`${ts()}  [${actor.label}] 차단  ${m.name.padEnd(18)} ${fmt(amount)} ETH  <- ${reason}`);
+      entry = { at: Date.now(), merchant: m.name, amount: fmt(amount), status: 'blocked', reason, planId: plan.id, planTitle: plan.title, rail, anomaly, agentLabel: actor.label, agentAddress: wallet.address };
     }
 
     const [today, total] = await vault.remaining(PRINCIPAL, wallet.address).catch(() => [0n, 0n]);
