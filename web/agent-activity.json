@@ -177,9 +177,42 @@
       "planTitle": "구독 서비스 자동 갱신",
       "rail": "settled",
       "anomaly": null
+    },
+    {
+      "at": 1785473408519,
+      "merchant": "OpenAI API 크레딧",
+      "amount": "0.000000009361",
+      "status": "paid",
+      "txHash": "0x1a96131b50aef6a94a6ac823699eff3957931c4f582a4da949fd68e477cd397c",
+      "planId": "T-2",
+      "planTitle": "개발 인프라 사용료 정산",
+      "rail": "onchain",
+      "anomaly": null
+    },
+    {
+      "at": 1785473457853,
+      "merchant": "GitHub Copilot",
+      "amount": "0.000000005339",
+      "status": "paid",
+      "txHash": "0x92914179ef896788196600ed168c4d41032ec69564bf0846f9b4b2f0bf0f1ada",
+      "planId": "T-1",
+      "planTitle": "구독 서비스 자동 갱신",
+      "rail": "settled",
+      "anomaly": null
+    },
+    {
+      "at": 1785473507181,
+      "merchant": "쿠팡 생필품",
+      "amount": "0.000000005767",
+      "status": "paid",
+      "txHash": "0x85557d13ca9bc31446361dac8325ce84155d2151bee3b63e964b80a61ff849d8",
+      "planId": "T-3",
+      "planTitle": "생활용품 정기 주문",
+      "rail": "settled",
+      "anomaly": null
     }
   ],
-  "updatedAt": "2026-07-31T04:49:19.215Z",
+  "updatedAt": "2026-07-31T04:51:47.209Z",
   "agent": "0xa686210a6291Da6A535E47592c087118604C8A47",
   "principal": "0x538F0C6c18014D3C31af08f0e25D8404D893A66F",
   "intervalSec": 45,
@@ -211,6 +244,6 @@
       ]
     }
   ],
-  "remainingToday": "0.000019911267",
-  "remainingTotal": "0.000199911267"
+  "remainingToday": "0.0000198908",
+  "remainingTotal": "0.0001998908"
 }
