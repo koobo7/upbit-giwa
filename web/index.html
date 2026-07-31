@@ -885,6 +885,10 @@ async function openAgentDialog() {
   }
 
   (async function initCtl() {
+    // 에이전트는 개인키가 있는 로컬에서만 돌린다. 원격(심사용) 서버에는 키가 없어
+    // 시작해도 즉시 죽으므로, 로컬에서 열었을 때만 제어 버튼을 노출한다.
+    const isLocal = ["localhost", "127.0.0.1", "[::1]"].includes(location.hostname);
+    if (!isLocal) { btn.style.display = "none"; return; }
     try {
       const s = await ctl("status");
       ctlAvailable = true;
@@ -892,7 +896,7 @@ async function openAgentDialog() {
       $("liveCard").style.display = "";   // 제어 가능하면 기록이 없어도 카드를 띄운다
       paint(s.running);
     } catch {
-      btn.style.display = "none";   // 원격 배포본에서는 표시하지 않는다
+      btn.style.display = "none";
     }
   })();
 
