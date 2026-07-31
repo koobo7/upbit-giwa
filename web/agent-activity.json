@@ -133,9 +133,53 @@
       "planTitle": "개발 인프라 사용료 정산",
       "rail": "onchain",
       "anomaly": null
+    },
+    {
+      "at": 1785473211165,
+      "merchant": "도메인 갱신",
+      "amount": "0.000000007143",
+      "status": "paid",
+      "txHash": "0x2b324b463a6979eba126b6e2f69a9989bd0cc4bd035d65277ee4d1bd8eb0206b",
+      "planId": "T-2",
+      "planTitle": "개발 인프라 사용료 정산",
+      "rail": "onchain",
+      "anomaly": null
+    },
+    {
+      "at": 1785473260489,
+      "merchant": "GitHub Copilot",
+      "amount": "0.000000006541",
+      "status": "paid",
+      "txHash": "0xde2f21b8a7397f31b6798452ca61618d0ff5b72eb67f78a43fb697cb266dc0c1",
+      "planId": "T-1",
+      "planTitle": "구독 서비스 자동 갱신",
+      "rail": "settled",
+      "anomaly": null
+    },
+    {
+      "at": 1785473309837,
+      "merchant": "AWS 사용료",
+      "amount": "0.000000008414",
+      "status": "paid",
+      "txHash": "0x4202d73928cee2735f49b66053b8552a7a1a0a9b1d7640c4b6acbac864427143",
+      "planId": "T-2",
+      "planTitle": "개발 인프라 사용료 정산",
+      "rail": "onchain",
+      "anomaly": null
+    },
+    {
+      "at": 1785473359183,
+      "merchant": "넷플릭스 구독",
+      "amount": "0.000000004959",
+      "status": "paid",
+      "txHash": "0x30a8887743e1f67ad6364d963cdedd28a3458cb7d634cd9058507617ac670aab",
+      "planId": "T-1",
+      "planTitle": "구독 서비스 자동 갱신",
+      "rail": "settled",
+      "anomaly": null
     }
   ],
-  "updatedAt": "2026-07-31T04:46:01.865Z",
+  "updatedAt": "2026-07-31T04:49:19.215Z",
   "agent": "0xa686210a6291Da6A535E47592c087118604C8A47",
   "principal": "0x538F0C6c18014D3C31af08f0e25D8404D893A66F",
   "intervalSec": 45,
@@ -167,6 +211,6 @@
       ]
     }
   ],
-  "remainingToday": "0.000019938324",
-  "remainingTotal": "0.000199938324"
+  "remainingToday": "0.000019911267",
+  "remainingTotal": "0.000199911267"
 }
