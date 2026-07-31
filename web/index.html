@@ -77,6 +77,11 @@
     </div>
   </section>
 
+  <section class="card full" id="demoCard" style="display:none">
+    <h2>데모 시나리오 <span style="color:var(--warn);text-transform:none;letter-spacing:0">영상 촬영용</span></h2>
+    <div id="demoBody"></div>
+  </section>
+
   <section class="card">
     <h2>1. 위임장 발급</h2>
     <label>에이전트 지갑 주소</label>
@@ -200,8 +205,10 @@ function walletName(p) {
   return "지갑";
 }
 
-$("connect").onclick = async () => {
+/** @param {boolean} silent true면 지갑 팝업을 띄우지 않는다 (자동 연결용) */
+async function connectWallet(silent = false) {
   const eth = pickWallet();
+  if (silent && !eth) return false;
   if (!eth) {
     alert(
       "EVM 지갑을 찾지 못했습니다.\n\n" +
@@ -212,14 +219,24 @@ $("connect").onclick = async () => {
     return;
   }
   provider = new ethers.BrowserProvider(eth);
-  try {
-    await provider.send("eth_requestAccounts", []);
-  } catch (e) {
-    return alert("지갑 연결이 취소되었습니다.\n" + (e?.message || ""));
+  if (silent) {
+    // eth_accounts는 이미 승인된 계정만 돌려주고 팝업을 띄우지 않는다.
+    // 승인 이력이 없으면 조용히 포기한다.
+    const accts = await provider.send("eth_accounts", []).catch(() => []);
+    if (!accts.length) return false;
+  } else {
+    try {
+      await provider.send("eth_requestAccounts", []);
+    } catch (e) {
+      alert("지갑 연결이 취소되었습니다.\n" + (e?.message || ""));
+      return false;
+    }
   }
 
   const net = await provider.getNetwork();
   if (Number(net.chainId) !== GIWA.chainId) {
+    // 자동 연결 중이라면 네트워크 전환 팝업도 띄우지 않는다.
+    if (silent) return false;
     try {
       await provider.send("wallet_switchEthereumChain", [{ chainId: GIWA.chainIdHex }]);
     } catch (e) {
@@ -268,13 +285,89 @@ $("connect").onclick = async () => {
       if (!ethers.isAddress(a)) return alert("주소 형식이 올바르지 않습니다.");
       location.search = "?vault=" + a;
     };
-    return;
+    return true;
   }
   vault = new ethers.Contract(VAULT_ADDR, ABI, signer);
 
+  $("connect").textContent = "연결됨";
   refresh();
   watch();
-};
+  return true;
+}
+
+$("connect").onclick = () => connectWallet(false);
+
+/* 데모 시나리오 패널.
+   web/demo-actors.json(공개 주소만)이 있으면 촬영용 안내와 자동 채움 버튼을 띄운다.
+   개인키는 이 파일에 없다 — 에이전트 결제는 script/agent.js가 수행한다. */
+(async function initDemoPanel() {
+  let a;
+  try {
+    const r = await fetch("./demo-actors.json", { cache: "no-store" });
+    if (!r.ok) return;
+    a = await r.json();
+  } catch { return; }
+  if (!a?.agent?.address) return;
+
+  const row = (label, addr, hint) => `
+    <div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid #1b2027;flex-wrap:wrap">
+      <div style="min-width:150px"><b>${label}</b><div class="dim" style="font-size:11px">${hint}</div></div>
+      <span class="mono" style="flex:1;min-width:260px">${addr}</span>
+      <button class="ghost" data-copy="${addr}" style="padding:4px 10px;font-size:11px">복사</button>
+    </div>`;
+
+  $("demoCard").style.display = "";
+  $("demoBody").innerHTML = `
+    <div class="dim" style="font-size:12px;margin-bottom:12px">
+      아래 주소로 위임장을 발급한 뒤, 터미널에서 에이전트를 실행하면
+      <b>한도 안의 결제는 통과하고 한도를 넘는 결제는 컨트랙트가 거절</b>합니다.
+    </div>
+    ${row("에이전트", a.agent.address, "AI가 쓰는 지갑. 1번 카드에 넣습니다")}
+    ${row("허용된 상점", a.shopA.address, "화이트리스트에 등록 → 결제 성공")}
+    ${row("낯선 주소", a.strangerB.address, "등록 안 함 → 결제 차단")}
+
+    <div class="row" style="margin-top:14px">
+      <button id="btnFillDemo">이 값으로 자동 채우기</button>
+    </div>
+
+    <div style="margin-top:16px;border-top:1px solid var(--line);padding-top:12px">
+      <div style="margin-bottom:6px"><b>촬영 순서</b></div>
+      <div class="dim" style="font-size:12px;line-height:1.9">
+        1. <b>자동 채우기</b> → <b>금고에 예치</b> (0.002 정도) → <b>위임장 발급</b><br>
+        2. 터미널: <span class="mono">node script/agent.js pay &lt;상점주소&gt; 0.0005 "구독 결제"</span> → 통과<br>
+        3. 터미널: <span class="mono">node script/agent.js pay &lt;상점주소&gt; 0.01 "한도 초과"</span> → <b>PerTxLimitExceeded</b><br>
+        4. 터미널: <span class="mono">node script/agent.js pay &lt;낯선주소&gt; 0.0005 "모르는 곳"</span> → <b>RecipientNotAllowed</b><br>
+        5. 이 화면에서 <b>즉시 회수</b> → 다시 2번 실행 → <b>DelegationInactive</b><br>
+        6. 3번 카드(감사 로그)에 결제 내역이 온체인으로 남은 것을 보여주며 마무리
+      </div>
+    </div>`;
+
+  $("demoBody").querySelectorAll("[data-copy]").forEach(b => {
+    b.onclick = async () => {
+      try { await navigator.clipboard.writeText(b.dataset.copy); b.textContent = "복사됨"; }
+      catch { b.textContent = "실패"; }
+      setTimeout(() => { b.textContent = "복사"; }, 1200);
+    };
+  });
+
+  $("btnFillDemo").onclick = () => {
+    $("agent").value = a.agent.address;
+    $("recipients").value = a.shopA.address;
+    $("perTx").value = "0.001";
+    $("daily").value = "0.002";
+    $("total").value = "0.003";
+    $("days").value = "30";
+    if (typeof refresh === "function") refresh();
+  };
+})();
+
+// 계정·네트워크가 바뀌면 화면을 다시 그린다.
+(function bindWalletEvents() {
+  const eth = pickWallet();
+  if (!eth?.on) return;
+  eth.on("accountsChanged", (a) => a.length ? connectWallet(true) : location.reload());
+  eth.on("chainChanged", () => location.reload());
+})();
 
 /* ───────── 테스트넷 ETH 충전 안내 ─────────
    GIWA Sepolia는 L2라 자체 포시트가 없다. 이더리움 Sepolia에서 받아
@@ -467,9 +560,12 @@ $("agent").addEventListener("change", () => refresh());
 
 /* 페이지 진입 시 지갑 유무를 먼저 알려준다.
    브레이브처럼 지갑이 꺼져 있는 경우 연결 버튼을 누르기 전에 알 수 있어야 한다. */
-(function initWalletHint() {
+(async function initWalletHint() {
   const eth = pickWallet();
   if (eth) {
+    $("faucetBody").innerHTML = `<div class="empty">${walletName(eth)} 확인 중…</div>`;
+    // 이미 승인한 사이트라면 팝업 없이 바로 연결한다.
+    if (await connectWallet(true)) return;
     $("faucetBody").innerHTML =
       `<div class="empty">${walletName(eth)} 감지됨 · 우측 상단 <b>지갑 연결</b>을 눌러주세요.
        <br><span class="dim" style="font-size:11px">연결 시 GIWA Sepolia 네트워크 추가를 승인해 주세요.</span></div>`;

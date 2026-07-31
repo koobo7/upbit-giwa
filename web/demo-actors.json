@@ -1,0 +1,14 @@
+{
+  "agent": {
+    "address": "0xa686210a6291Da6A535E47592c087118604C8A47",
+    "label": "에이전트"
+  },
+  "shopA": {
+    "address": "0x028B525Bc043fBdb7Ce76fcD2eD279b71aB943C2",
+    "label": "허용된 상점"
+  },
+  "strangerB": {
+    "address": "0xF22863650992F0428CA66C5Bc775Bce5F73D57c6",
+    "label": "낯선 주소 (미등록)"
+  }
+}
