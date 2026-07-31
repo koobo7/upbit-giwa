@@ -54,6 +54,11 @@
   .empty{color:var(--dim);font-size:12px;padding:18px 0;text-align:center}
   .note{font-size:11px;color:var(--dim);margin-top:12px;line-height:1.7}
   .full{grid-column:1/-1}
+  @keyframes pulse{
+    0%{box-shadow:0 0 0 0 rgba(74,222,128,.6)}
+    70%{box-shadow:0 0 0 7px rgba(74,222,128,0)}
+    100%{box-shadow:0 0 0 0 rgba(74,222,128,0)}
+  }
   #log{max-height:260px;overflow:auto}
 </style>
 </head>
@@ -77,9 +82,25 @@
     </div>
   </section>
 
+  <section class="card full" id="liveCard" style="display:none">
+    <h2 style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+      <span id="liveDot" style="width:8px;height:8px;border-radius:50%;background:var(--accent);
+            display:inline-block;box-shadow:0 0 0 0 var(--accent);animation:pulse 2s infinite"></span>
+      <span>자율 결제 에이전트</span>
+      <span class="spacer" style="flex:1"></span>
+      <span class="dim" id="liveMeta" style="font-size:11px;text-transform:none;letter-spacing:0"></span>
+    </h2>
+    <div id="liveBody"></div>
+  </section>
+
   <section class="card full" id="demoCard" style="display:none">
-    <h2>직접 확인해 보기</h2>
-    <div id="demoBody"></div>
+    <h2 style="display:flex;align-items:center;gap:10px;margin-bottom:0">
+      <span>직접 확인해 보기</span>
+      <span class="spacer" style="flex:1"></span>
+      <button class="ghost" id="btnToggleDemo"
+              style="padding:3px 11px;font-size:11px;text-transform:none;letter-spacing:0">접기</button>
+    </h2>
+    <div id="demoBody" style="margin-top:14px"></div>
   </section>
 
   <section class="card">
@@ -309,6 +330,72 @@ async function connectWallet(silent = false) {
 
 $("connect").onclick = () => connectWallet(false);
 
+/* 자율 결제 에이전트 활동 표시.
+   script/daemon.js가 web/agent-activity.json에 상태를 쓰고, 여기서 주기적으로 읽는다.
+   지갑 연결 여부와 무관하게 동작하므로 처음 방문한 사람도 바로 볼 수 있다. */
+(function initLiveFeed() {
+  const ago = (t) => {
+    const s = Math.floor((Date.now() - t) / 1000);
+    if (s < 60) return `${s}초 전`;
+    if (s < 3600) return `${Math.floor(s / 60)}분 전`;
+    return `${Math.floor(s / 3600)}시간 전`;
+  };
+
+  async function tick() {
+    let a;
+    try {
+      const r = await fetch("./agent-activity.json", { cache: "no-store" });
+      if (!r.ok) return;
+      a = await r.json();
+    } catch { return; }
+    if (!a?.events?.length) return;
+
+    $("liveCard").style.display = "";
+
+    // 마지막 기록이 오래됐으면 멈춘 것으로 본다.
+    const last = a.events[a.events.length - 1];
+    const stale = Date.now() - last.at > Math.max(300000, (a.intervalSec || 90) * 3000);
+    const live = a.running && !stale;
+    $("liveDot").style.background = live ? "var(--accent)" : "var(--dim)";
+    $("liveDot").style.animation = live ? "pulse 2s infinite" : "none";
+    $("liveMeta").textContent = live
+      ? `${a.intervalSec}초마다 결제 · 오늘 남은 한도 ${Number(a.remainingToday).toFixed(8)} ETH`
+      : `일시 중지 · 마지막 활동 ${ago(last.at)}`;
+
+    const paid = a.events.filter(e => e.status === "paid").length;
+    const blocked = a.events.filter(e => e.status === "blocked").length;
+
+    const rows = a.events.slice().reverse().slice(0, 12).map(e => `
+      <tr>
+        <td class="dim" style="white-space:nowrap">${ago(e.at)}</td>
+        <td>${e.merchant}</td>
+        <td class="mono">${Number(e.amount).toFixed(8)}</td>
+        <td>${e.status === "paid"
+              ? `<span class="ok">결제됨</span>`
+              : `<span class="no">차단 · ${e.reason}</span>`}</td>
+        <td class="mono">${e.txHash
+              ? `<a class="dim" target="_blank" href="${GIWA.explorer}/tx/${e.txHash}">보기</a>` : ""}</td>
+      </tr>`).join("");
+
+    $("liveBody").innerHTML = `
+      <div class="dim" style="font-size:12px;margin-bottom:12px">
+        사람이 매번 승인하지 않아도 에이전트가 구독료·API 크레딧 같은 반복 결제를 스스로 처리합니다.
+        <b>한도를 넘거나 등록되지 않은 곳으로 가는 시도는 컨트랙트가 거절</b>하며, 그 기록도 함께 남습니다.
+      </div>
+      <div class="row" style="margin:0 0 12px">
+        <span class="badge ok">결제 ${paid}</span>
+        <span class="badge no">차단 ${blocked}</span>
+      </div>
+      <table>
+        <thead><tr><th>시각</th><th>가맹점</th><th>금액(ETH)</th><th>결과</th><th></th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  }
+
+  tick();
+  setInterval(tick, 15000);
+})();
+
 /* 체험 패널.
    web/demo-actors.json(공개 주소만)이 있으면 시연용 주소와 자동 채움 버튼을 띄운다.
    개인키는 이 파일에 없다 — 에이전트 결제는 script/agent.js가 수행한다. */
@@ -353,11 +440,11 @@ $("connect").onclick = () => connectWallet(false);
     <div style="margin-top:16px;border-top:1px solid var(--line);padding-top:12px">
       <div style="margin-bottom:8px"><b>시연 순서</b></div>
       <div class="dim" style="font-size:12px;line-height:1.9">
-        <b>1.</b> 위 <b>자동 채우기</b> → <b>금고에 예치</b>(0.002) → <b>위임장 발급</b><br>
-        <span style="padding-left:14px">건당 0.001 / 일일 0.002 / 총 0.003 ETH, 허용 수취인은 상점 하나뿐입니다.</span><br><br>
+        <b>1.</b> 위 <b>자동 채우기</b> → <b>금고에 예치</b>(0.0002) → <b>위임장 발급</b><br>
+        <span style="padding-left:14px">건당 0.000002 / 일일 0.00002 / 총 0.0002 ETH. 허용 수취인은 상점 하나뿐입니다.</span><br><br>
 
         <b>2.</b> 한도 안에서는 사람 개입 없이 결제됩니다<br>
-        ${cmd(`node script/agent.js pay ${a.shopA.address} 0.0005 "구독 결제"`)}
+        ${cmd(`node script/agent.js pay ${a.shopA.address} 0.000001 "구독 결제"`)}
         <span style="padding-left:14px">→ 통과. 아래 감사 로그에 즉시 기록됩니다.</span><br><br>
 
         <b>3.</b> 에이전트가 탈취됐다고 가정하고 한도를 넘겨 봅니다<br>
@@ -365,7 +452,7 @@ $("connect").onclick = () => connectWallet(false);
         <span style="padding-left:14px">→ <b class="no">PerTxLimitExceeded</b>. 앱이 아니라 컨트랙트가 거절합니다.</span><br><br>
 
         <b>4.</b> 등록되지 않은 곳으로 보내 봅니다<br>
-        ${cmd(`node script/agent.js pay ${a.strangerB.address} 0.0005 "모르는 곳"`)}
+        ${cmd(`node script/agent.js pay ${a.strangerB.address} 0.000001 "모르는 곳"`)}
         <span style="padding-left:14px">→ <b class="no">RecipientNotAllowed</b></span><br><br>
 
         <b>5.</b> 이 화면에서 <b>즉시 회수</b>를 누른 뒤 2번을 다시 실행<br>
@@ -385,12 +472,24 @@ $("connect").onclick = () => connectWallet(false);
     };
   });
 
+  // 접기/펼치기. 기본은 펼침이고 선택은 다음 방문에도 유지한다.
+  const toggle = $("btnToggleDemo");
+  const applyFold = (folded) => {
+    $("demoBody").style.display = folded ? "none" : "";
+    toggle.textContent = folded ? "펼치기" : "접기";
+    localStorage.setItem("ingam.demoFolded", folded ? "1" : "0");
+  };
+  applyFold(localStorage.getItem("ingam.demoFolded") === "1");
+  toggle.onclick = () => applyFold($("demoBody").style.display !== "none");
+
   $("btnFillDemo").onclick = () => {
     $("agent").value = a.agent.address;
-    $("recipients").value = a.shopA.address;
-    $("perTx").value = "0.001";
-    $("daily").value = "0.002";
-    $("total").value = "0.003";
+    // 상점 A + 자율 결제 에이전트가 이용하는 가맹점들을 모두 허용 목록에 넣는다.
+    // 낯선 주소는 일부러 제외한다 — 차단이 실제로 일어나야 하기 때문이다.
+    $("recipients").value = [a.shopA.address, ...(a.merchants ?? []).map(m => m.address)].join(", ");
+    $("perTx").value = "0.000002";
+    $("daily").value = "0.00002";
+    $("total").value = "0.0002";
     $("days").value = "30";
     if (typeof refresh === "function") refresh();
   };

@@ -1,0 +1,148 @@
+/**
+ * INGAM 자율 결제 에이전트 (상시 실행)
+ *
+ * 위임받은 한도 안에서 스스로 결제를 이어가는 에이전트. 구독료·API 크레딧·
+ * 생필품처럼 사람이 매번 승인하지 않는 반복 결제를 대신 처리하는 상황을 재현한다.
+ *
+ * 사람이 개입하지 않아도 결제가 계속되지만, 한도를 넘거나 등록되지 않은 곳으로
+ * 가려는 시도는 컨트랙트가 거절한다. 그 거절도 로그에 그대로 남긴다.
+ *
+ *   node script/daemon.js              기본 간격(90초)으로 실행
+ *   INTERVAL=30 node script/daemon.js  간격 지정 (초)
+ *   ONCE=1 node script/daemon.js       한 번만 결제하고 종료
+ *
+ * 종료는 Ctrl+C. 상태는 web/agent-activity.json에 기록되어 대시보드가 읽는다.
+ */
+const { ethers } = require('ethers');
+const fs = require('fs');
+const path = require('path');
+
+const ROOT = path.join(__dirname, '..');
+const deployed = require(path.join(ROOT, 'web', 'deployed.json'));
+const artifact = require(path.join(ROOT, 'build', 'DelegationVault.json'));
+
+const ACTIVITY = path.join(ROOT, 'web', 'agent-activity.json');
+const INTERVAL = Number(process.env.INTERVAL || 90) * 1000;
+const PRINCIPAL = process.env.PRINCIPAL || deployed.deployer;
+
+const provider = new ethers.JsonRpcProvider(
+  deployed.rpc, { chainId: deployed.chainId, name: 'giwa-sepolia' }, { staticNetwork: true }
+);
+
+function loadAgentKey() {
+  if (process.env.AGENT_KEY) return process.env.AGENT_KEY;
+  const f = path.join(ROOT, 'demo-wallets.json');
+  if (!fs.existsSync(f)) {
+    console.error('demo-wallets.json이 없습니다. AGENT_KEY 환경변수로 넘기세요.');
+    process.exit(1);
+  }
+  return JSON.parse(fs.readFileSync(f, 'utf8'))[0].privateKey;
+}
+
+function loadMerchants() {
+  const f = path.join(ROOT, 'demo-merchants.json');
+  if (!fs.existsSync(f)) {
+    console.error('demo-merchants.json이 없습니다.');
+    process.exit(1);
+  }
+  return JSON.parse(fs.readFileSync(f, 'utf8'));
+}
+
+// 상점마다 결제 성격이 다르다. 금액과 메모를 그럴듯하게 만든다.
+// 금액은 건당 한도(0.000002 ETH) 안에 들도록 잡았다. 테스트넷 잔액을 아끼면서도
+// 일일 한도가 실제로 소진되어 컨트랙트가 차단하는 장면까지 보여주기 위함이다.
+const CATALOG = {
+  '넷플릭스 구독': ['월 구독료', 0.0000012],
+  'OpenAI API 크레딧': ['API 사용료 정산', 0.0000018],
+  'AWS 사용료': ['클라우드 사용료', 0.0000015],
+  '쿠팡 생필품': ['생필품 자동 주문', 0.0000010],
+  '스포티파이 구독': ['월 구독료', 0.0000008],
+  '도메인 갱신': ['도메인 연장', 0.0000012],
+  'GitHub Copilot': ['월 구독료', 0.0000011],
+  '배달 주문': ['점심 주문', 0.0000014],
+};
+
+const fmt = (v) => ethers.formatEther(v);
+const ts = () => new Date().toLocaleTimeString('ko-KR');
+
+function readActivity() {
+  try { return JSON.parse(fs.readFileSync(ACTIVITY, 'utf8')); } catch { return { events: [] }; }
+}
+
+function writeActivity(patch) {
+  const cur = readActivity();
+  const next = { ...cur, ...patch, updatedAt: new Date().toISOString() };
+  next.events = (patch.events ?? cur.events ?? []).slice(-40);
+  fs.writeFileSync(ACTIVITY, JSON.stringify(next, null, 2));
+}
+
+async function main() {
+  const wallet = new ethers.Wallet(loadAgentKey(), provider);
+  const vault = new ethers.Contract(deployed.address, artifact.abi, wallet);
+  const merchants = loadMerchants();
+
+  console.log('INGAM 자율 결제 에이전트');
+  console.log(`  컨트랙트  ${deployed.address}`);
+  console.log(`  위임자    ${PRINCIPAL}`);
+  console.log(`  에이전트  ${wallet.address}`);
+  console.log(`  결제 간격  ${INTERVAL / 1000}초\n`);
+
+  const d = await vault.getDelegation(PRINCIPAL, wallet.address);
+  if (d.expiry === 0n) {
+    console.error('위임이 없습니다. 대시보드에서 이 에이전트에게 먼저 위임장을 발급하세요.');
+    console.error(`  에이전트 주소: ${wallet.address}`);
+    process.exit(1);
+  }
+
+  let running = true;
+  process.on('SIGINT', () => {
+    running = false;
+    console.log('\n중지합니다.');
+    writeActivity({ running: false });
+    process.exit(0);
+  });
+
+  while (running) {
+    const m = merchants[Math.floor(Math.random() * merchants.length)];
+    const [memoBase, base] = CATALOG[m.name] ?? ['자동 결제', 0.00002];
+    // 금액에 약간의 편차를 줘서 매번 같은 값이 찍히지 않게 한다.
+    const amount = ethers.parseEther((base * (0.8 + Math.random() * 0.4)).toFixed(8));
+    const memo = `${m.name} · ${memoBase}`;
+
+    let entry;
+    try {
+      const [ok, reason] = await vault.canSpend(PRINCIPAL, wallet.address, m.address, amount);
+      if (!ok) {
+        console.log(`${ts()}  차단  ${m.name.padEnd(18)} ${fmt(amount)} ETH  <- ${reason}`);
+        entry = { at: Date.now(), merchant: m.name, amount: fmt(amount), status: 'blocked', reason };
+      } else {
+        const tx = await vault.spend(PRINCIPAL, m.address, amount, memo);
+        await tx.wait();
+        console.log(`${ts()}  결제  ${m.name.padEnd(18)} ${fmt(amount)} ETH  ${tx.hash.slice(0, 14)}…`);
+        entry = { at: Date.now(), merchant: m.name, amount: fmt(amount), status: 'paid', txHash: tx.hash };
+      }
+    } catch (e) {
+      const reason = e.revert?.name ?? e.shortMessage ?? String(e);
+      console.log(`${ts()}  차단  ${m.name.padEnd(18)} ${fmt(amount)} ETH  <- ${reason}`);
+      entry = { at: Date.now(), merchant: m.name, amount: fmt(amount), status: 'blocked', reason };
+    }
+
+    const [today, total] = await vault.remaining(PRINCIPAL, wallet.address).catch(() => [0n, 0n]);
+    const events = [...readActivity().events, entry];
+    writeActivity({
+      running: true,
+      agent: wallet.address,
+      principal: PRINCIPAL,
+      contract: deployed.address,
+      intervalSec: INTERVAL / 1000,
+      remainingToday: fmt(today),
+      remainingTotal: fmt(total),
+      events,
+    });
+
+    if (process.env.ONCE) break;
+    await new Promise((r) => setTimeout(r, INTERVAL));
+  }
+}
+
+main().catch((e) => { console.error(e.shortMessage || e.message || e); process.exit(1); });

@@ -9,3 +9,4 @@ deployed.json
 
 # 데모용 지갑 (개인키 포함) - 절대 커밋 금지
 demo-wallets.json
+demo-merchants.json

@@ -10,5 +10,39 @@
   "strangerB": {
     "address": "0xF22863650992F0428CA66C5Bc775Bce5F73D57c6",
     "label": "낯선 주소 (미등록)"
-  }
+  },
+  "merchants": [
+    {
+      "name": "넷플릭스 구독",
+      "address": "0x2d018745CC680A9b706d631B919AE77624C2f003"
+    },
+    {
+      "name": "OpenAI API 크레딧",
+      "address": "0x57097E508fE5c1a0705e3345861eFf069DFe7A3c"
+    },
+    {
+      "name": "AWS 사용료",
+      "address": "0x3A54688Dd33247796E83872b49d7a24E8e344744"
+    },
+    {
+      "name": "쿠팡 생필품",
+      "address": "0xF6B908FD9FAB218B783cE569e7dc76712479B7c2"
+    },
+    {
+      "name": "스포티파이 구독",
+      "address": "0x1f5565E24F1d586Fa3776e10F7e272DC81B7808e"
+    },
+    {
+      "name": "도메인 갱신",
+      "address": "0xdFD75b6a28D9BeD805296b7643AC8A66ACd7f03e"
+    },
+    {
+      "name": "GitHub Copilot",
+      "address": "0x0b3a1be6657c3F1B6d7db15835E4bCb8F46282D2"
+    },
+    {
+      "name": "배달 주문",
+      "address": "0x2736D6E545193dCe5AF6252Fe06BB7a53B214B66"
+    }
+  ]
 }
