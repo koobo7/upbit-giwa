@@ -181,7 +181,14 @@ let DEPLOY_BLOCK = null;
 
 const $ = (id) => document.getElementById(id);
 const E = (v) => ethers.parseEther(String(v).trim() || "0");
-const F = (v) => Number(ethers.formatEther(v)).toLocaleString(undefined, { maximumFractionDigits: 4 });
+// 에이전트 결제는 소액이라 4자리로 자르면 0으로 보인다.
+// 값이 작을수록 자릿수를 늘려 실제 금액이 드러나게 한다.
+const F = (v) => {
+  const n = Number(ethers.formatEther(v));
+  if (n === 0) return "0";
+  const digits = n < 0.0001 ? 8 : n < 0.01 ? 6 : 4;
+  return n.toLocaleString(undefined, { maximumFractionDigits: digits });
+};
 const short = (a) => a.slice(0, 8) + "…" + a.slice(-4);
 
 // 배포 주소 로드: ?vault= 쿼리 > deployed.json > 수동 입력

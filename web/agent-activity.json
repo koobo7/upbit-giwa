@@ -6,6 +6,13 @@
       "amount": "0.00000109",
       "status": "blocked",
       "reason": "RECIPIENT_NOT_ALLOWED"
+    },
+    {
+      "at": 1785463536686,
+      "merchant": "OpenAI API 크레딧",
+      "amount": "0.00000156",
+      "status": "blocked",
+      "reason": "insufficient funds for intrinsic transaction cost"
     }
   ],
   "running": true,
@@ -13,7 +20,7 @@
   "principal": "0x538F0C6c18014D3C31af08f0e25D8404D893A66F",
   "contract": "0x44a3E444494D147b4c64b89aBFb1279c3cC4171e",
   "intervalSec": 90,
-  "remainingToday": "0.002",
-  "remainingTotal": "0.003",
-  "updatedAt": "2026-07-31T01:53:39.759Z"
+  "remainingToday": "0.00002",
+  "remainingTotal": "0.0002",
+  "updatedAt": "2026-07-31T02:05:36.721Z"
 }
