@@ -384,6 +384,58 @@ async function connectWallet(silent = false) {
 
 $("connect").onclick = () => connectWallet(false);
 
+/* 지갑 없이도 체인을 읽기 위한 provider.
+   심사자는 지갑을 연결하지 않고 들어온다. 감사 로그는 공개 정보이므로
+   RPC로 직접 조회해 첫 화면부터 보이게 한다. */
+let _rp = null;
+function readProvider() {
+  if (!_rp) {
+    _rp = new ethers.JsonRpcProvider(
+      GIWA.rpc, { chainId: GIWA.chainId, name: "giwa-sepolia" }, { staticNetwork: true }
+    );
+  }
+  return _rp;
+}
+
+/** 지갑 연결 전에도 온체인 감사 로그를 보여준다. */
+(async function initPublicLog() {
+  try {
+    const r = await fetch("./deployed.json", { cache: "no-store" });
+    if (!r.ok) return;
+    const j = await r.json();
+    if (!ethers.isAddress(j.address)) return;
+    if (Number.isInteger(j.blockNumber)) DEPLOY_BLOCK = j.blockNumber;
+
+    const rp = readProvider();
+    const c = new ethers.Contract(j.address, ABI, rp);
+    const from = DEPLOY_BLOCK ?? Math.max(0, (await rp.getBlockNumber()) - 9000);
+    const spent = await c.queryFilter(c.filters.Spent(), from);
+    if (!spent.length) return;
+
+    const rows = spent.slice(-30).reverse().map(l => `
+      <tr>
+        <td class="mono dim">#${l.blockNumber}</td>
+        <td class="mono">${short(l.args.recipient)}</td>
+        <td>${F(l.args.amount)} ETH</td>
+        <td class="dim">${l.args.memo || "-"}</td>
+        <td class="mono"><a class="dim" target="_blank"
+          href="${GIWA.explorer}/tx/${l.transactionHash}">보기</a></td>
+      </tr>`).join("");
+    $("log").innerHTML = `<table>
+      <thead><tr><th>블록</th><th>수취인</th><th>금액</th><th>메모</th><th></th></tr></thead>
+      <tbody>${rows}</tbody></table>`;
+
+    // 지갑을 연결하지 않아도 새 결제가 들어오면 갱신되도록 주기 조회를 건다.
+    setInterval(async () => {
+      if (document.hidden || vault) return;   // 지갑 연결 후에는 refresh()가 담당
+      try {
+        const more = await c.queryFilter(c.filters.Spent(), from);
+        if (more.length !== spent.length) location.reload();
+      } catch {}
+    }, 20000);
+  } catch {}
+})();
+
 /* 위임장 입력값을 브라우저에 보존한다.
    새로고침이나 재발급 때마다 주소를 다시 붙여넣는 수고를 없앤다. */
 (function persistForm() {
@@ -401,6 +453,24 @@ $("connect").onclick = () => connectWallet(false);
       for (const k of ids) cur[k] = $(k)?.value ?? "";
       localStorage.setItem(KEY, JSON.stringify(cur));
     });
+  }
+
+  // 저장된 값이 없는 첫 방문이라면 데모 주소·한도로 미리 채워 둔다.
+  // HTML 기본값(0.5/1/5)은 현재 테스트넷 잔액에 맞지 않아 그대로 쓰면 실패한다.
+  if (!saved.agent) {
+    fetch("./demo-actors.json", { cache: "no-store" })
+      .then(r => r.ok ? r.json() : null)
+      .then(a => {
+        if (!a?.agent?.address || $("agent").value.trim()) return;
+        $("agent").value = a.agent.address;
+        $("recipients").value = [a.shopA.address, ...(a.merchants ?? []).map(m => m.address)].join(", ");
+        $("perTx").value = "0.000002";
+        $("daily").value = "0.00002";
+        $("total").value = "0.0002";
+        $("days").value = "30";
+        ids.forEach(id => $(id)?.dispatchEvent(new Event("input")));
+      })
+      .catch(() => {});
   }
 })();
 
@@ -565,9 +635,10 @@ async function openAgentDialog() {
     // 카드는 initCtl에서 이미 보이게 했으므로 여기서는 내용만 채운다.
 
     // 마지막 기록이 오래됐으면 멈춘 것으로 본다.
+    // 로컬 제어 API가 있으면 실제 프로세스 상태를 우선한다 (파일보다 정확하다).
     const last = a.events[a.events.length - 1];
     const stale = Date.now() - last.at > Math.max(300000, (a.intervalSec || 90) * 3000);
-    const live = a.running && !stale;
+    const live = ctlAvailable ? ctlRunning : (a.running && !stale);
     $("liveDot").style.background = live ? "var(--accent)" : "var(--dim)";
     $("liveDot").style.animation = live ? "pulse 2s infinite" : "none";
     $("liveMeta").textContent = live
@@ -641,8 +712,10 @@ async function openAgentDialog() {
      제어 API는 로컬 serve.js에만 있다. 정적 호스팅 환경에서는 버튼을 숨긴다. */
   const btn = $("btnDaemon");
   let ctlAvailable = false;
+  let ctlRunning = false;
 
   const paint = (running) => {
+    ctlRunning = running;
     btn.textContent = running ? "■" : "▶";
     btn.title = running ? "정지" : "시작";
     btn.style.color = running ? "var(--danger)" : "var(--accent)";
@@ -673,6 +746,20 @@ async function openAgentDialog() {
       const cur = await ctl("status");
       const next = await ctl(cur.running ? "stop" : "start");
       paint(next.running);
+      // 시작 직후 프로세스가 살아있는지 확인한다. 의존 파일이 없으면 즉시 죽는다.
+      if (!cur.running) {
+        setTimeout(async () => {
+          try {
+            const s = await ctl("status");
+            paint(s.running);
+            if (!s.running) {
+              alert("에이전트가 시작 직후 종료되었습니다.\n\n" +
+                    "이 서버에 실행 준비가 되어 있지 않을 수 있습니다.\n" +
+                    "npm install · npm run build · demo-wallets.json 을 확인하세요.");
+            }
+          } catch {}
+        }, 2500);
+      }
       setTimeout(tick, 1200);
     } catch {
       alert("에이전트 제어에 실패했습니다. 로컬에서 npm run web 으로 실행 중인지 확인하세요.");
@@ -962,7 +1049,8 @@ async function refresh() {
 async function loadLog(agent) {
   // GIWA는 블록이 1초라 고정 범위(9000블록)면 2.5시간치밖에 안 보인다.
   // 배포 시점부터 조회해 누적 기록이 전부 남도록 한다.
-  const head = await provider.getBlockNumber();
+  const rp = provider ?? readProvider();
+  const head = await rp.getBlockNumber();
   const from = DEPLOY_BLOCK ?? Math.max(0, head - 9000);
   const spent = await vault.queryFilter(vault.filters.Spent(null, agent), from);
   if (spent.length === 0) {
