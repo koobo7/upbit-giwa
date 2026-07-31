@@ -172,28 +172,78 @@ async function loadAddress() {
   return prompt("배포된 DelegationVault 주소를 입력하세요 (npm run deploy 결과)");
 }
 
+/* EIP-1193 지갑 선택.
+   브레이브는 자체 지갑이 내장돼 있고, 메타마스크와 함께 설치되면
+   window.ethereum.providers 배열로 들어온다. 특정 지갑을 요구하지 않는다. */
+function pickWallet() {
+  const eth = window.ethereum;
+  if (!eth) return null;
+  if (Array.isArray(eth.providers) && eth.providers.length) {
+    // 여러 개면 메타마스크 > 브레이브 > 첫 번째 순으로 고른다.
+    return eth.providers.find(p => p.isMetaMask)
+        || eth.providers.find(p => p.isBraveWallet)
+        || eth.providers[0];
+  }
+  return eth;
+}
+
+function walletName(p) {
+  if (!p) return "지갑";
+  if (p.isMetaMask) return "메타마스크";
+  if (p.isBraveWallet) return "브레이브 지갑";
+  if (p.isCoinbaseWallet) return "코인베이스 지갑";
+  return "지갑";
+}
+
 $("connect").onclick = async () => {
-  if (!window.ethereum) return alert("메타마스크가 필요합니다.");
-  provider = new ethers.BrowserProvider(window.ethereum);
-  await provider.send("eth_requestAccounts", []);
+  const eth = pickWallet();
+  if (!eth) {
+    alert(
+      "EVM 지갑을 찾지 못했습니다.\n\n" +
+      "브레이브를 쓰신다면: 우측 상단 지갑 아이콘을 눌러 Brave Wallet을 먼저 활성화하세요.\n" +
+      "(brave://settings/web3 에서 기본 지갑 설정 확인)\n\n" +
+      "또는 메타마스크 확장을 설치한 뒤 새로고침하세요."
+    );
+    return;
+  }
+  provider = new ethers.BrowserProvider(eth);
+  try {
+    await provider.send("eth_requestAccounts", []);
+  } catch (e) {
+    return alert("지갑 연결이 취소되었습니다.\n" + (e?.message || ""));
+  }
 
   const net = await provider.getNetwork();
   if (Number(net.chainId) !== GIWA.chainId) {
     try {
       await provider.send("wallet_switchEthereumChain", [{ chainId: GIWA.chainIdHex }]);
-    } catch {
-      await provider.send("wallet_addEthereumChain", [{
-        chainId: GIWA.chainIdHex, chainName: GIWA.name,
-        rpcUrls: [GIWA.rpc], blockExplorerUrls: [GIWA.explorer],
-        nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
-      }]);
+    } catch (e) {
+      // 4902 = 지갑에 해당 체인이 없음. 추가를 시도한다.
+      try {
+        await provider.send("wallet_addEthereumChain", [{
+          chainId: GIWA.chainIdHex, chainName: GIWA.name,
+          rpcUrls: [GIWA.rpc], blockExplorerUrls: [GIWA.explorer],
+          nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+        }]);
+      } catch (e2) {
+        return alert(
+          "GIWA Sepolia 네트워크 추가에 실패했습니다.\n\n" +
+          "지갑에서 직접 추가해 주세요:\n" +
+          `  네트워크 이름: ${GIWA.name}\n` +
+          `  RPC URL: ${GIWA.rpc}\n` +
+          `  체인 ID: ${GIWA.chainId}\n` +
+          "  통화 기호: ETH\n" +
+          `  익스플로러: ${GIWA.explorer}\n\n` +
+          (e2?.message || "")
+        );
+      }
     }
-    provider = new ethers.BrowserProvider(window.ethereum);
+    provider = new ethers.BrowserProvider(eth);
   }
 
   signer = await provider.getSigner();
   me = await signer.getAddress();
-  $("net").textContent = `${GIWA.name} · ${short(me)}`;
+  $("net").textContent = `${GIWA.name} · ${short(me)} · ${walletName(eth)}`;
 
   // 잔액·충전 안내는 컨트랙트 배포 여부와 무관하게 먼저 보여준다.
   await refreshGas();
@@ -398,6 +448,38 @@ function watch() {
 }
 
 $("agent").addEventListener("change", () => refresh());
+
+/* 페이지 진입 시 지갑 유무를 먼저 알려준다.
+   브레이브처럼 지갑이 꺼져 있는 경우 연결 버튼을 누르기 전에 알 수 있어야 한다. */
+(function initWalletHint() {
+  const eth = pickWallet();
+  if (eth) {
+    $("faucetBody").innerHTML =
+      `<div class="empty">${walletName(eth)} 감지됨 · 우측 상단 <b>지갑 연결</b>을 눌러주세요.</div>`;
+    return;
+  }
+  $("faucetBody").innerHTML = `
+    <div style="padding:4px 0">
+      <div style="margin-bottom:10px"><b class="no">EVM 지갑을 찾지 못했습니다.</b></div>
+      <div style="margin-bottom:8px"><b>브레이브 브라우저</b>를 쓰신다면 내장 지갑을 켜면 됩니다:</div>
+      <div class="dim" style="font-size:12px;line-height:1.9;margin-bottom:12px">
+        1. 우측 상단 <b>지갑 아이콘</b> 클릭 → 지갑 만들기(또는 복구)<br>
+        2. 또는 주소창에 <span class="mono">brave://wallet</span> 입력<br>
+        3. 설정에서 기본 지갑이 <b>Brave Wallet</b> 또는 <b>확장 프로그램</b>인지 확인:
+           <span class="mono">brave://settings/web3</span><br>
+        4. 지갑을 켠 뒤 <b>이 페이지를 새로고침</b>하세요
+      </div>
+      <div style="margin-bottom:8px">또는 메타마스크를 설치하세요:</div>
+      <div class="row" style="margin-top:6px">
+        <a href="https://metamask.io/download/" target="_blank" rel="noopener">
+          <button class="ghost">메타마스크 설치</button></a>
+        <button class="ghost" onclick="location.reload()">새로고침</button>
+      </div>
+      <div class="note">
+        지갑은 GIWA Sepolia <b>테스트넷</b> 연결에만 씁니다. 실제 자산은 쓰지 마세요.
+      </div>
+    </div>`;
+})();
 </script>
 </body>
 </html>
