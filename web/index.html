@@ -169,7 +169,9 @@ async function loadAddress() {
       }
     } catch {}
   }
-  return prompt("배포된 DelegationVault 주소를 입력하세요 (npm run deploy 결과)");
+  // 미배포 상태에서 prompt를 띄우면 충전 안내를 가린다.
+  // 주소는 ?vault= 나 deployed.json 으로만 받고, 없으면 조용히 넘어간다.
+  return null;
 }
 
 /* EIP-1193 지갑 선택.
@@ -253,8 +255,19 @@ $("connect").onclick = async () => {
 
   VAULT_ADDR = VAULT_ADDR || await loadAddress();
   if (!VAULT_ADDR || !ethers.isAddress(VAULT_ADDR)) {
-    $("status").innerHTML = `<div class="empty">컨트랙트가 아직 배포되지 않았습니다.<br>
-      <span class="mono">npm run deploy</span> 후 <span class="mono">?vault=0x…</span>로 접속하세요.</div>`;
+    $("status").innerHTML = `
+      <div class="empty" style="padding-bottom:8px">컨트랙트가 아직 배포되지 않았습니다.</div>
+      <div class="dim" style="font-size:12px;margin-bottom:8px">
+        <span class="mono">npm run deploy</span> 로 배포하면 자동으로 잡힙니다.
+        이미 배포된 주소가 있다면 아래에 넣으세요.</div>
+      <input id="manualVault" class="mono" placeholder="0x… (배포된 DelegationVault 주소)" />
+      <div class="row"><button class="ghost" id="btnSetVault">이 주소로 연결</button></div>`;
+    const btn = $("btnSetVault");
+    if (btn) btn.onclick = () => {
+      const a = $("manualVault").value.trim();
+      if (!ethers.isAddress(a)) return alert("주소 형식이 올바르지 않습니다.");
+      location.search = "?vault=" + a;
+    };
     return;
   }
   vault = new ethers.Contract(VAULT_ADDR, ABI, signer);
