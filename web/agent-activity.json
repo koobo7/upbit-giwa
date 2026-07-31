@@ -89,9 +89,53 @@
       "planTitle": "개발 인프라 사용료 정산",
       "rail": "onchain",
       "anomaly": "merchant"
+    },
+    {
+      "at": 1785473018071,
+      "merchant": "넷플릭스 구독",
+      "amount": "0.000000006659",
+      "status": "paid",
+      "txHash": "0x286d36d2c1a766087b9227d869d1b81d8e5467283e1e3917801165d088b0b0b9",
+      "planId": "T-1",
+      "planTitle": "구독 서비스 자동 갱신",
+      "rail": "settled",
+      "anomaly": null
+    },
+    {
+      "at": 1785473063175,
+      "merchant": "미등록 수취처 (GitHub Copilot 사칭)",
+      "amount": "0.000000004832",
+      "status": "blocked",
+      "reason": "RECIPIENT_NOT_ALLOWED",
+      "planId": "T-1",
+      "planTitle": "구독 서비스 자동 갱신",
+      "rail": "settled",
+      "anomaly": "recipient"
+    },
+    {
+      "at": 1785473112518,
+      "merchant": "배달 주문",
+      "amount": "0.000000005937",
+      "status": "paid",
+      "txHash": "0x856fe9d5cab61423def2617db1b92e2a95ed237318417146f236ce37b2515e3e",
+      "planId": "T-3",
+      "planTitle": "생활용품 정기 주문",
+      "rail": "settled",
+      "anomaly": null
+    },
+    {
+      "at": 1785473161834,
+      "merchant": "OpenAI API 크레딧",
+      "amount": "0.000000009149",
+      "status": "paid",
+      "txHash": "0x6f1578446e0253ef9368c7c79115e34beeb30380203461942d78d1d215c4a574",
+      "planId": "T-2",
+      "planTitle": "개발 인프라 사용료 정산",
+      "rail": "onchain",
+      "anomaly": null
     }
   ],
-  "updatedAt": "2026-07-31T04:42:48.770Z",
+  "updatedAt": "2026-07-31T04:46:01.865Z",
   "agent": "0xa686210a6291Da6A535E47592c087118604C8A47",
   "principal": "0x538F0C6c18014D3C31af08f0e25D8404D893A66F",
   "intervalSec": 45,
@@ -123,6 +167,6 @@
       ]
     }
   ],
-  "remainingToday": "0.000019960069",
-  "remainingTotal": "0.000199960069"
+  "remainingToday": "0.000019938324",
+  "remainingTotal": "0.000199938324"
 }
