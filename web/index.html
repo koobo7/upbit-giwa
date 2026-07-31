@@ -64,11 +64,19 @@
     <div class="sub">AI 에이전트에게 권한은 주되, 한도는 체인이 강제한다</div>
   </div>
   <div class="spacer"></div>
+  <div class="net" id="gasbal" style="display:none"></div>
   <div class="net" id="net">지갑 미연결</div>
   <button class="ghost" id="connect">지갑 연결</button>
 </header>
 
 <main>
+  <section class="card full" id="faucetCard">
+    <h2>0. 테스트넷 ETH 충전 <span style="color:var(--accent);text-transform:none;letter-spacing:0">무료</span></h2>
+    <div id="faucetBody">
+      <div class="empty">지갑을 연결하면 잔액과 충전 방법을 안내합니다.</div>
+    </div>
+  </section>
+
   <section class="card">
     <h2>1. 위임장 발급</h2>
     <label>에이전트 지갑 주소</label>
@@ -185,13 +193,105 @@ $("connect").onclick = async () => {
 
   signer = await provider.getSigner();
   me = await signer.getAddress();
+  $("net").textContent = `${GIWA.name} · ${short(me)}`;
+
+  // 잔액·충전 안내는 컨트랙트 배포 여부와 무관하게 먼저 보여준다.
+  await refreshGas();
+
   VAULT_ADDR = VAULT_ADDR || await loadAddress();
+  if (!VAULT_ADDR || !ethers.isAddress(VAULT_ADDR)) {
+    $("status").innerHTML = `<div class="empty">컨트랙트가 아직 배포되지 않았습니다.<br>
+      <span class="mono">npm run deploy</span> 후 <span class="mono">?vault=0x…</span>로 접속하세요.</div>`;
+    return;
+  }
   vault = new ethers.Contract(VAULT_ADDR, ABI, signer);
 
-  $("net").textContent = `${GIWA.name} · ${short(me)}`;
   refresh();
   watch();
 };
+
+/* ───────── 테스트넷 ETH 충전 안내 ─────────
+   GIWA Sepolia는 L2라 자체 포시트가 없다. 이더리움 Sepolia에서 받아
+   브릿지로 넘기는 2단계다. 포시트는 캡차·로그인을 요구하는 외부 서비스라
+   버튼 한 번으로 자동 충전은 불가능하다. 여기서는 잔액을 실시간으로 보여주고
+   각 단계로 바로 보내는 것까지만 한다. */
+const FAUCETS = [
+  { name: "Google Cloud Faucet", url: "https://cloud.google.com/application/web3/faucet/ethereum/sepolia", note: "구글 계정" },
+  { name: "Alchemy Faucet", url: "https://sepoliafaucet.com", note: "Alchemy 계정" },
+  { name: "Infura Faucet", url: "https://www.infura.io/faucet/sepolia", note: "Infura 계정" },
+  { name: "QuickNode Faucet", url: "https://faucet.quicknode.com/ethereum/sepolia", note: "트위터 인증" },
+];
+const GIWA_BRIDGE = "https://sepolia-bridge.giwa.io";
+
+let gasPoll = null;
+
+async function refreshGas() {
+  if (!me) return 0n;
+  let bal = 0n;
+  try { bal = await provider.getBalance(me); } catch { return 0n; }
+
+  const el = $("gasbal");
+  el.style.display = "";
+  el.innerHTML = `가스 <b class="${bal === 0n ? "no" : "ok"}">${F(bal)}</b> ETH`;
+
+  const enough = bal > 0n;
+  $("faucetBody").innerHTML = `
+    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:14px">
+      <div>
+        <div class="sub">내 지갑 잔액 (가스비)</div>
+        <div style="font-size:26px;font-weight:700;letter-spacing:-.02em"
+             class="${enough ? "ok" : "no"}">${F(bal)} <span style="font-size:14px;font-weight:400">ETH</span></div>
+      </div>
+      <div class="spacer" style="flex:1"></div>
+      <div style="text-align:right">
+        <div class="sub">내 주소</div>
+        <div class="mono">${me}</div>
+        <button class="ghost" id="btnCopyAddr" style="margin-top:6px;padding:5px 10px">주소 복사</button>
+      </div>
+    </div>
+
+    ${enough ? `
+      <div class="note" style="color:var(--accent);margin:0">
+        잔액이 있습니다. 아래 1번 카드에서 금고에 예치하고 위임장을 발급할 수 있습니다.
+      </div>
+    ` : `
+      <div style="border-top:1px solid var(--line);padding-top:14px">
+        <div style="margin-bottom:10px">
+          <b>잔액이 0입니다.</b> 트랜잭션을 보내려면 가스비가 필요합니다.
+          GIWA Sepolia는 <b>테스트넷</b>이라 아래 ETH는 <b>전부 무료</b>이고 실제 가치가 없습니다.
+        </div>
+
+        <div style="margin:14px 0 6px"><b>1단계</b> · 이더리움 Sepolia에서 테스트 ETH 받기 (주소 붙여넣기)</div>
+        <div class="row" style="margin-top:6px">
+          ${FAUCETS.map(f => `<a href="${f.url}" target="_blank" rel="noopener">
+            <button class="ghost">${f.name} <span class="dim">· ${f.note}</span></button></a>`).join("")}
+        </div>
+
+        <div style="margin:16px 0 6px"><b>2단계</b> · 받은 ETH를 GIWA Sepolia로 브릿지</div>
+        <div class="row" style="margin-top:6px">
+          <a href="${GIWA_BRIDGE}" target="_blank" rel="noopener"><button>GIWA 브릿지 열기</button></a>
+          <a href="${GIWA.explorer}" target="_blank" rel="noopener"><button class="ghost">익스플로러</button></a>
+        </div>
+
+        <div class="note">
+          브릿지는 몇 분 걸립니다. 도착하면 이 숫자가 <b>자동으로</b> 갱신됩니다 (10초마다 확인).
+        </div>
+      </div>
+    `}
+  `;
+
+  const copy = $("btnCopyAddr");
+  if (copy) copy.onclick = async () => {
+    try { await navigator.clipboard.writeText(me); copy.textContent = "복사됨"; }
+    catch { copy.textContent = "복사 실패"; }
+    setTimeout(() => { copy.textContent = "주소 복사"; }, 1500);
+  };
+
+  // 잔액이 들어올 때까지만 폴링한다.
+  if (!enough && !gasPoll) gasPoll = setInterval(refreshGas, 10000);
+  if (enough && gasPoll) { clearInterval(gasPoll); gasPoll = null; }
+  return bal;
+}
 
 $("btnDeposit").onclick = async () => {
   const amt = prompt("금고에 예치할 금액 (ETH)", "1");
@@ -199,6 +299,7 @@ $("btnDeposit").onclick = async () => {
   const tx = await vault.deposit({ value: E(amt) });
   await tx.wait();
   refresh();
+  refreshGas();
 };
 
 $("btnCreate").onclick = async () => {
