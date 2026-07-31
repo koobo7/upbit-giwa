@@ -298,9 +298,42 @@
       "planTitle": "개발 인프라 사용료 정산",
       "rail": "onchain",
       "anomaly": null
+    },
+    {
+      "at": 1785473938534,
+      "merchant": "넷플릭스 구독",
+      "amount": "0.000000006043",
+      "status": "paid",
+      "txHash": "0x23eb9efb11441a6313f0263e7d46f605aa8b8ebf29ad57ae377b3e8a9b38893a",
+      "planId": "T-1",
+      "planTitle": "구독 서비스 자동 갱신",
+      "rail": "settled",
+      "anomaly": null
+    },
+    {
+      "at": 1785473987874,
+      "merchant": "도메인 갱신",
+      "amount": "0.000000006695",
+      "status": "paid",
+      "txHash": "0x99b53856d25a63f2c6809e84f1e6195d9e4df0473a49ac6ebc2f0d915ca18dbb",
+      "planId": "T-2",
+      "planTitle": "개발 인프라 사용료 정산",
+      "rail": "onchain",
+      "anomaly": null
+    },
+    {
+      "at": 1785474037217,
+      "merchant": "도메인 갱신",
+      "amount": "0.000000005227",
+      "status": "paid",
+      "txHash": "0x6661fa8d11d3716433e719f96ed7ac23b52d6167e1314ae5eb860bd15ece96cf",
+      "planId": "T-2",
+      "planTitle": "개발 인프라 사용료 정산",
+      "rail": "onchain",
+      "anomaly": null
     }
   ],
-  "updatedAt": "2026-07-31T04:58:09.237Z",
+  "updatedAt": "2026-07-31T05:00:37.248Z",
   "agent": "0xa686210a6291Da6A535E47592c087118604C8A47",
   "principal": "0x538F0C6c18014D3C31af08f0e25D8404D893A66F",
   "intervalSec": 45,
@@ -332,6 +365,6 @@
       ]
     }
   ],
-  "remainingToday": "0.000019860777",
-  "remainingTotal": "0.000199860777"
+  "remainingToday": "0.000019842812",
+  "remainingTotal": "0.000199842812"
 }
