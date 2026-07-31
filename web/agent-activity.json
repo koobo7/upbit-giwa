@@ -23,6 +23,16 @@
       "planId": "T-1",
       "planTitle": "구독 서비스 자동 갱신",
       "rail": "settled"
+    },
+    {
+      "at": 1785465585481,
+      "merchant": "도메인 갱신",
+      "amount": "0.00000139",
+      "status": "paid",
+      "txHash": "0x58964681c3ff728fa19230e211e26010eef6183cbc3bf6a986a968120f12c076",
+      "planId": "T-2",
+      "planTitle": "개발 인프라 사용료 정산",
+      "rail": "onchain"
     }
   ],
   "running": true,
@@ -30,9 +40,9 @@
   "principal": "0x538F0C6c18014D3C31af08f0e25D8404D893A66F",
   "contract": "0x44a3E444494D147b4c64b89aBFb1279c3cC4171e",
   "intervalSec": 90,
-  "remainingToday": "0.00001893",
-  "remainingTotal": "0.00019893",
-  "updatedAt": "2026-07-31T02:20:26.655Z",
+  "remainingToday": "0.00001626",
+  "remainingTotal": "0.00019626",
+  "updatedAt": "2026-07-31T02:39:45.518Z",
   "plan": [
     {
       "id": "T-1",
