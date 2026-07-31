@@ -51,16 +51,28 @@ function loadMerchants() {
 // 상점마다 결제 성격이 다르다. 금액과 메모를 그럴듯하게 만든다.
 // 금액은 건당 한도(0.000002 ETH) 안에 들도록 잡았다. 테스트넷 잔액을 아끼면서도
 // 일일 한도가 실제로 소진되어 컨트랙트가 차단하는 장면까지 보여주기 위함이다.
+//
+// rail: 결제 경로. 쿠팡 같은 곳은 ETH를 직접 받지 않으므로 정산 파트너를 거친다.
+//   onchain  — 수취인이 직접 온체인 정산 (API 크레딧, 클라우드 등)
+//   settled  — 정산 파트너가 법정통화로 대납하고 온체인에서 정산
 const CATALOG = {
-  '넷플릭스 구독': ['월 구독료', 0.0000012],
-  'OpenAI API 크레딧': ['API 사용료 정산', 0.0000018],
-  'AWS 사용료': ['클라우드 사용료', 0.0000015],
-  '쿠팡 생필품': ['생필품 자동 주문', 0.0000010],
-  '스포티파이 구독': ['월 구독료', 0.0000008],
-  '도메인 갱신': ['도메인 연장', 0.0000012],
-  'GitHub Copilot': ['월 구독료', 0.0000011],
-  '배달 주문': ['점심 주문', 0.0000014],
+  '넷플릭스 구독':      ['월 구독료',        0.0000012, 'settled'],
+  'OpenAI API 크레딧': ['API 사용료 정산',   0.0000018, 'onchain'],
+  'AWS 사용료':        ['클라우드 사용료',   0.0000015, 'onchain'],
+  '쿠팡 생필품':        ['생필품 자동 주문',  0.0000010, 'settled'],
+  '스포티파이 구독':     ['월 구독료',        0.0000008, 'settled'],
+  '도메인 갱신':        ['도메인 연장',      0.0000012, 'onchain'],
+  'GitHub Copilot':   ['월 구독료',        0.0000011, 'settled'],
+  '배달 주문':          ['점심 주문',        0.0000014, 'settled'],
 };
+
+// 에이전트가 수행 중인 구매 계획. 각 결제가 어느 항목에서 비롯됐는지 남긴다.
+const PLAN = [
+  { id: 'T-1', title: '구독 서비스 자동 갱신',   items: ['넷플릭스 구독', '스포티파이 구독', 'GitHub Copilot'] },
+  { id: 'T-2', title: '개발 인프라 사용료 정산', items: ['OpenAI API 크레딧', 'AWS 사용료', '도메인 갱신'] },
+  { id: 'T-3', title: '생활용품 정기 주문',     items: ['쿠팡 생필품', '배달 주문'] },
+];
+const planOf = (merchant) => PLAN.find((p) => p.items.includes(merchant)) ?? PLAN[0];
 
 const fmt = (v) => ethers.formatEther(v);
 const ts = () => new Date().toLocaleTimeString('ko-KR');
@@ -104,27 +116,29 @@ async function main() {
 
   while (running) {
     const m = merchants[Math.floor(Math.random() * merchants.length)];
-    const [memoBase, base] = CATALOG[m.name] ?? ['자동 결제', 0.00002];
+    const [memoBase, base, rail] = CATALOG[m.name] ?? ['자동 결제', 0.000001, 'onchain'];
+    const plan = planOf(m.name);
     // 금액에 약간의 편차를 줘서 매번 같은 값이 찍히지 않게 한다.
     const amount = ethers.parseEther((base * (0.8 + Math.random() * 0.4)).toFixed(8));
-    const memo = `${m.name} · ${memoBase}`;
+    // 메모는 온체인에 남으므로 어떤 계획에서 나온 결제인지 여기 새긴다.
+    const memo = `[${plan.id}] ${m.name} · ${memoBase}`;
 
     let entry;
     try {
       const [ok, reason] = await vault.canSpend(PRINCIPAL, wallet.address, m.address, amount);
       if (!ok) {
         console.log(`${ts()}  차단  ${m.name.padEnd(18)} ${fmt(amount)} ETH  <- ${reason}`);
-        entry = { at: Date.now(), merchant: m.name, amount: fmt(amount), status: 'blocked', reason };
+        entry = { at: Date.now(), merchant: m.name, amount: fmt(amount), status: 'blocked', reason, planId: plan.id, planTitle: plan.title, rail };
       } else {
         const tx = await vault.spend(PRINCIPAL, m.address, amount, memo);
         await tx.wait();
         console.log(`${ts()}  결제  ${m.name.padEnd(18)} ${fmt(amount)} ETH  ${tx.hash.slice(0, 14)}…`);
-        entry = { at: Date.now(), merchant: m.name, amount: fmt(amount), status: 'paid', txHash: tx.hash };
+        entry = { at: Date.now(), merchant: m.name, amount: fmt(amount), status: 'paid', txHash: tx.hash, planId: plan.id, planTitle: plan.title, rail };
       }
     } catch (e) {
       const reason = e.revert?.name ?? e.shortMessage ?? String(e);
       console.log(`${ts()}  차단  ${m.name.padEnd(18)} ${fmt(amount)} ETH  <- ${reason}`);
-      entry = { at: Date.now(), merchant: m.name, amount: fmt(amount), status: 'blocked', reason };
+      entry = { at: Date.now(), merchant: m.name, amount: fmt(amount), status: 'blocked', reason, planId: plan.id, planTitle: plan.title, rail };
     }
 
     const [today, total] = await vault.remaining(PRINCIPAL, wallet.address).catch(() => [0n, 0n]);
@@ -135,6 +149,7 @@ async function main() {
       principal: PRINCIPAL,
       contract: deployed.address,
       intervalSec: INTERVAL / 1000,
+      plan: PLAN,
       remainingToday: fmt(today),
       remainingTotal: fmt(total),
       events,

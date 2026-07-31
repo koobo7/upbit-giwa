@@ -13,6 +13,16 @@
       "amount": "0.00000156",
       "status": "blocked",
       "reason": "insufficient funds for intrinsic transaction cost"
+    },
+    {
+      "at": 1785464426621,
+      "merchant": "넷플릭스 구독",
+      "amount": "0.00000107",
+      "status": "paid",
+      "txHash": "0x53c9e40a01afb8891b50e40dd92131107c65c57f2a9b0e9493c1e474ff076ec5",
+      "planId": "T-1",
+      "planTitle": "구독 서비스 자동 갱신",
+      "rail": "settled"
     }
   ],
   "running": true,
@@ -20,7 +30,35 @@
   "principal": "0x538F0C6c18014D3C31af08f0e25D8404D893A66F",
   "contract": "0x44a3E444494D147b4c64b89aBFb1279c3cC4171e",
   "intervalSec": 90,
-  "remainingToday": "0.00002",
-  "remainingTotal": "0.0002",
-  "updatedAt": "2026-07-31T02:05:36.721Z"
+  "remainingToday": "0.00001893",
+  "remainingTotal": "0.00019893",
+  "updatedAt": "2026-07-31T02:20:26.655Z",
+  "plan": [
+    {
+      "id": "T-1",
+      "title": "구독 서비스 자동 갱신",
+      "items": [
+        "넷플릭스 구독",
+        "스포티파이 구독",
+        "GitHub Copilot"
+      ]
+    },
+    {
+      "id": "T-2",
+      "title": "개발 인프라 사용료 정산",
+      "items": [
+        "OpenAI API 크레딧",
+        "AWS 사용료",
+        "도메인 갱신"
+      ]
+    },
+    {
+      "id": "T-3",
+      "title": "생활용품 정기 주문",
+      "items": [
+        "쿠팡 생필품",
+        "배달 주문"
+      ]
+    }
+  ]
 }

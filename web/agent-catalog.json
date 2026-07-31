@@ -1,0 +1,58 @@
+[
+  {
+    "id": "claude-code",
+    "name": "Claude Code",
+    "vendor": "Anthropic",
+    "icon": "◆",
+    "defaultPort": 3001,
+    "desc": "터미널 기반 코딩 에이전트"
+  },
+  {
+    "id": "openai-operator",
+    "name": "Operator",
+    "vendor": "OpenAI",
+    "icon": "●",
+    "defaultPort": 3002,
+    "desc": "웹 브라우징·구매 자동화"
+  },
+  {
+    "id": "langchain",
+    "name": "LangChain Agent",
+    "vendor": "LangChain",
+    "icon": "▲",
+    "defaultPort": 3003,
+    "desc": "툴 호출 기반 범용 에이전트"
+  },
+  {
+    "id": "autogpt",
+    "name": "AutoGPT",
+    "vendor": "Significant Gravitas",
+    "icon": "▣",
+    "defaultPort": 3004,
+    "desc": "자율 목표 수행 에이전트"
+  },
+  {
+    "id": "crewai",
+    "name": "CrewAI",
+    "vendor": "CrewAI",
+    "icon": "✦",
+    "defaultPort": 3005,
+    "desc": "멀티 에이전트 협업 프레임워크"
+  },
+  {
+    "id": "mcp-generic",
+    "name": "MCP 서버",
+    "vendor": "Model Context Protocol",
+    "icon": "⬢",
+    "defaultPort": 3006,
+    "desc": "MCP 규격을 따르는 모든 도구"
+  },
+  {
+    "id": "custom",
+    "name": "직접 입력",
+    "vendor": "",
+    "icon": "○",
+    "defaultPort": null,
+    "desc": "목록에 없는 에이전트"
+  }
+]

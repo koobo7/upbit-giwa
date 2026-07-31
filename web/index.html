@@ -4,6 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>INGAM — AI 에이전트 위임 결제 레이어</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='44' fill='none' stroke='%23d33f36' stroke-width='7'/%3E%3Cline x1='50' y1='14' x2='50' y2='86' stroke='%23d33f36' stroke-width='4'/%3E%3Ctext x='29' y='46' text-anchor='middle' fill='%23d33f36' font-size='30' font-weight='700' font-family='serif'%3E%EC%9D%B8%3C/text%3E%3Ctext x='71' y='46' text-anchor='middle' fill='%23d33f36' font-size='30' font-weight='700' font-family='serif'%3E%EA%B0%90%3C/text%3E%3Ctext x='50' y='80' text-anchor='middle' fill='%23d33f36' font-size='19' font-weight='700' font-family='serif'%3E%E5%A7%94%E4%BB%BB%3C/text%3E%3C/svg%3E" />
 <style>
   :root{
     --bg:#0b0d10; --panel:#14181d; --line:#242b33; --text:#e8ecf1;
@@ -54,6 +55,10 @@
   .empty{color:var(--dim);font-size:12px;padding:18px 0;text-align:center}
   .note{font-size:11px;color:var(--dim);margin-top:12px;line-height:1.7}
   .full{grid-column:1/-1}
+  #dlg{position:fixed;inset:0;background:rgba(0,0,0,.72);display:none;
+    align-items:center;justify-content:center;padding:20px;z-index:50}
+  #dlgBox{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:20px;width:100%;max-width:440px;max-height:88vh;overflow:auto}
   @keyframes pulse{
     0%{box-shadow:0 0 0 0 rgba(74,222,128,.6)}
     70%{box-shadow:0 0 0 7px rgba(74,222,128,0)}
@@ -64,6 +69,28 @@
 </head>
 <body>
 <header>
+  <!-- 전통 인감(印鑑) 도장을 형상화한 로고. 붉은 주문(朱文) 원형 인장 형식이다. -->
+  <svg id="seal" width="44" height="44" viewBox="0 0 100 100" aria-label="인감" role="img">
+    <defs>
+      <clipPath id="sealClip"><circle cx="50" cy="50" r="46"/></clipPath>
+    </defs>
+    <g clip-path="url(#sealClip)">
+      <!-- 도장이 찍힌 듯한 미세한 번짐 -->
+      <circle cx="50" cy="50" r="46" fill="#c0392b" opacity=".07"/>
+    </g>
+    <circle cx="50" cy="50" r="44" fill="none" stroke="#d33f36" stroke-width="5"/>
+    <line x1="50" y1="12" x2="50" y2="88" stroke="#d33f36" stroke-width="2.5"/>
+    <!-- 인(印) / 감(鑑)을 한글 전서 느낌으로 배치 -->
+    <text x="29" y="43" text-anchor="middle" fill="#d33f36"
+          font-size="26" font-weight="700"
+          font-family="'Nanum Myeongjo','Apple SD Gothic Neo',serif">인</text>
+    <text x="71" y="43" text-anchor="middle" fill="#d33f36"
+          font-size="26" font-weight="700"
+          font-family="'Nanum Myeongjo','Apple SD Gothic Neo',serif">감</text>
+    <text x="50" y="78" text-anchor="middle" fill="#d33f36"
+          font-size="17" font-weight="700" letter-spacing="1"
+          font-family="'Nanum Myeongjo','Apple SD Gothic Neo',serif">委任</text>
+  </svg>
   <div>
     <h1>INGAM <span class="dim" style="font-weight:400">인감</span></h1>
     <div class="sub">AI 에이전트에게 권한은 주되, 한도는 체인이 강제한다</div>
@@ -82,11 +109,23 @@
     </div>
   </section>
 
+  <section class="card full" id="agentsCard">
+    <h2 style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+      <span>연동된 에이전트</span>
+      <span class="spacer" style="flex:1"></span>
+      <button class="ghost" id="btnAddAgent"
+              style="padding:4px 12px;font-size:11px;text-transform:none;letter-spacing:0">+ 에이전트 연동</button>
+    </h2>
+    <div id="agentsBody"></div>
+  </section>
+
   <section class="card full" id="liveCard" style="display:none">
     <h2 style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
       <span id="liveDot" style="width:8px;height:8px;border-radius:50%;background:var(--accent);
             display:inline-block;box-shadow:0 0 0 0 var(--accent);animation:pulse 2s infinite"></span>
       <span>자율 결제 에이전트</span>
+      <button class="ghost" id="btnDaemon" title="시작/정지"
+              style="padding:2px 10px;font-size:13px;line-height:1.4;text-transform:none;letter-spacing:0">▶</button>
       <span class="spacer" style="flex:1"></span>
       <span class="dim" id="liveMeta" style="font-size:11px;text-transform:none;letter-spacing:0"></span>
     </h2>
@@ -105,7 +144,7 @@
 
   <section class="card">
     <h2>1. 위임장 발급</h2>
-    <label>에이전트 지갑 주소</label>
+    <label>에이전트 지갑 주소 <span class="dim" style="font-weight:400">· 마지막 입력값 자동 채움</span></label>
     <input id="agent" class="mono" placeholder="0x..." />
     <div class="grid2">
       <div><label>건당 한도 (ETH)</label><input id="perTx" value="0.5" /></div>
@@ -113,7 +152,8 @@
       <div><label>총 한도 (ETH)</label><input id="total" value="5" /></div>
       <div><label>유효 기간 (일)</label><input id="days" value="30" /></div>
     </div>
-    <label>허용 수취인 (쉼표로 구분, 비우면 제한 없음)</label>
+    <label>허용 수취인 (쉼표로 구분, 비우면 제한 없음)
+      <span class="dim" style="font-weight:400">· 마지막 입력값 자동 채움</span></label>
     <input id="recipients" class="mono" placeholder="0xshop..., 0xapi..." />
     <div class="row">
       <button id="btnCreate">위임장 발급</button>
@@ -150,6 +190,8 @@
     </div>
   </section>
 </main>
+
+<div id="dlg"><div id="dlgBox"><div id="dlgBody"></div></div></div>
 
 <script type="module">
 import { ethers } from "https://esm.sh/ethers@6.13.2";
@@ -342,6 +384,164 @@ async function connectWallet(silent = false) {
 
 $("connect").onclick = () => connectWallet(false);
 
+/* 위임장 입력값을 브라우저에 보존한다.
+   새로고침이나 재발급 때마다 주소를 다시 붙여넣는 수고를 없앤다. */
+(function persistForm() {
+  const ids = ["agent", "perTx", "daily", "total", "days", "recipients"];
+  const KEY = "ingam.form";
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem(KEY)) ?? {}; } catch {}
+
+  for (const id of ids) {
+    const el = $(id);
+    if (!el) continue;
+    if (saved[id] != null && saved[id] !== "") el.value = saved[id];
+    el.addEventListener("input", () => {
+      const cur = {};
+      for (const k of ids) cur[k] = $(k)?.value ?? "";
+      localStorage.setItem(KEY, JSON.stringify(cur));
+    });
+  }
+})();
+
+/* ─────────── 에이전트 연동 ───────────
+   등록 정보는 브라우저에 저장한다. 결제 권한 자체는 온체인 위임이 관리하므로
+   여기 저장되는 것은 "어떤 에이전트가 이 주소를 쓰는가"라는 표시용 메타데이터뿐이다. */
+const AGENTS_KEY = "ingam.agents";
+let CATALOG = [];
+
+const loadAgents = () => { try { return JSON.parse(localStorage.getItem(AGENTS_KEY)) ?? []; } catch { return []; } };
+const saveAgents = (v) => localStorage.setItem(AGENTS_KEY, JSON.stringify(v));
+
+/** 로컬에서 돌고 있는 에이전트 엔드포인트를 찾는다.
+ *  브라우저는 포트 스캔이 막혀 있으므로, 카탈로그의 기본 포트에만 짧은 타임아웃으로 접근한다.
+ *  CORS로 본문을 못 읽어도 "응답이 왔다"는 사실만으로 살아있음을 알 수 있다. */
+async function detectAgents() {
+  const ports = [...new Set(CATALOG.map(c => c.defaultPort).filter(Boolean))];
+  const found = [];
+  await Promise.all(ports.map(async (port) => {
+    const url = `http://127.0.0.1:${port}`;
+    try {
+      const ctl = new AbortController();
+      const t = setTimeout(() => ctl.abort(), 700);
+      await fetch(url, { mode: "no-cors", signal: ctl.signal });
+      clearTimeout(t);
+      found.push({ port, url });
+    } catch {}
+  }));
+  return found;
+}
+
+function renderAgents() {
+  const list = loadAgents();
+  if (!list.length) {
+    $("agentsBody").innerHTML = `
+      <div class="empty">아직 연동된 에이전트가 없습니다.<br>
+        <span class="dim" style="font-size:11px">
+          우측 <b>+ 에이전트 연동</b>으로 등록하면, 어떤 에이전트가 무엇을 샀는지 결제 기록에 함께 남습니다.</span>
+      </div>`;
+    return;
+  }
+  $("agentsBody").innerHTML = list.map((g, i) => `
+    <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #1b2027;flex-wrap:wrap">
+      <div style="width:34px;height:34px;border-radius:9px;background:#0b0e12;border:1px solid var(--line);
+                  display:flex;align-items:center;justify-content:center;font-size:16px">${g.icon || "○"}</div>
+      <div style="min-width:150px">
+        <div><b>${g.nickname || g.name}</b>
+          ${g.nickname ? `<span class="dim" style="font-size:11px"> · ${g.name}</span>` : ""}</div>
+        <div class="dim" style="font-size:11px">${g.vendor || "직접 등록"}</div>
+      </div>
+      <div style="flex:1;min-width:200px">
+        <div class="mono" style="font-size:11px">${g.endpoint || "-"}</div>
+        <div class="mono dim" style="font-size:10px">${g.wallet ? short(g.wallet) : "지갑 미지정"}</div>
+      </div>
+      <span class="badge ${g.online ? "ok" : "dim"}">${g.online ? "연결됨" : "확인 안 됨"}</span>
+      <button class="ghost" data-del="${i}" style="padding:3px 9px;font-size:11px">해제</button>
+    </div>`).join("");
+
+  $("agentsBody").querySelectorAll("[data-del]").forEach(b => {
+    b.onclick = () => {
+      const v = loadAgents();
+      v.splice(Number(b.dataset.del), 1);
+      saveAgents(v);
+      renderAgents();
+    };
+  });
+}
+
+async function openAgentDialog() {
+  const detected = await detectAgents();
+  const detectedNote = detected.length
+    ? `<div class="dim" style="font-size:11px;margin-top:4px;color:var(--accent)">
+         로컬에서 ${detected.map(d => d.port).join(", ")} 포트 응답을 감지했습니다.</div>`
+    : `<div class="dim" style="font-size:11px;margin-top:4px">
+         로컬에서 실행 중인 에이전트를 찾지 못했습니다. 주소를 직접 입력하세요.</div>`;
+
+  $("dlgBody").innerHTML = `
+    <label>에이전트 선택</label>
+    <select id="agSel">
+      ${CATALOG.map(c => `<option value="${c.id}">${c.icon}  ${c.name}${c.vendor ? " · " + c.vendor : ""}</option>`).join("")}
+    </select>
+    <div class="dim" id="agDesc" style="font-size:11px;margin-top:4px"></div>
+
+    <label>별명 (선택)</label>
+    <input id="agNick" placeholder="예: 장보기 담당" />
+
+    <label>연결 라우팅 주소</label>
+    <input id="agUrl" class="mono" placeholder="http://127.0.0.1:3001" />
+    ${detectedNote}
+
+    <label>에이전트 지갑 주소 (선택)</label>
+    <input id="agWallet" class="mono" placeholder="0x… 비우면 아래 위임 대상 주소를 씁니다" />
+
+    <div class="row">
+      <button id="agSave">연동</button>
+      <button class="ghost" id="agDetect">다시 감지</button>
+      <button class="ghost" id="agCancel">취소</button>
+    </div>`;
+  $("dlg").style.display = "flex";
+
+  const sel = $("agSel");
+  const sync = () => {
+    const c = CATALOG.find(x => x.id === sel.value);
+    $("agDesc").textContent = c?.desc || "";
+    const hit = detected.find(d => d.port === c?.defaultPort);
+    $("agUrl").value = hit ? hit.url : (c?.defaultPort ? `http://127.0.0.1:${c.defaultPort}` : "");
+  };
+  sel.onchange = sync; sync();
+
+  $("agCancel").onclick = () => { $("dlg").style.display = "none"; };
+  $("agDetect").onclick = () => openAgentDialog();
+  $("agSave").onclick = () => {
+    const c = CATALOG.find(x => x.id === sel.value);
+    const wallet = $("agWallet").value.trim();
+    if (wallet && !ethers.isAddress(wallet)) return alert("지갑 주소 형식이 올바르지 않습니다.");
+    const endpoint = $("agUrl").value.trim();
+    const v = loadAgents();
+    v.push({
+      id: c.id, name: c.name, vendor: c.vendor, icon: c.icon,
+      nickname: $("agNick").value.trim(),
+      endpoint,
+      wallet: wallet || ($("agent")?.value.trim() || ""),
+      online: detected.some(d => endpoint.includes(String(d.port))),
+      addedAt: Date.now(),
+    });
+    saveAgents(v);
+    $("dlg").style.display = "none";
+    renderAgents();
+  };
+}
+
+(async function initAgents() {
+  try {
+    const r = await fetch("./agent-catalog.json", { cache: "no-store" });
+    if (r.ok) CATALOG = await r.json();
+  } catch {}
+  if (!CATALOG.length) { $("agentsCard").style.display = "none"; return; }
+  $("btnAddAgent").onclick = () => openAgentDialog();
+  renderAgents();
+})();
+
 /* 자율 결제 에이전트 활동 표시.
    script/daemon.js가 web/agent-activity.json에 상태를 쓰고, 여기서 주기적으로 읽는다.
    지갑 연결 여부와 무관하게 동작하므로 처음 방문한 사람도 바로 볼 수 있다. */
@@ -360,9 +560,9 @@ $("connect").onclick = () => connectWallet(false);
       if (!r.ok) return;
       a = await r.json();
     } catch { return; }
+    if (a?.events?.length) $("liveCard").style.display = "";
     if (!a?.events?.length) return;
-
-    $("liveCard").style.display = "";
+    // 카드는 initCtl에서 이미 보이게 했으므로 여기서는 내용만 채운다.
 
     // 마지막 기록이 오래됐으면 멈춘 것으로 본다.
     const last = a.events[a.events.length - 1];
@@ -377,11 +577,24 @@ $("connect").onclick = () => connectWallet(false);
     const paid = a.events.filter(e => e.status === "paid").length;
     const blocked = a.events.filter(e => e.status === "blocked").length;
 
+    // 이 지갑으로 등록된 에이전트가 있으면 그 아이콘·별명을 쓴다.
+    const linked = loadAgents().find(g => !g.wallet || g.wallet.toLowerCase() === (a.agent || "").toLowerCase());
+    const who = linked
+      ? `<span title="${linked.name}">${linked.icon} ${linked.nickname || linked.name}</span>`
+      : `<span class="dim" title="${a.agent || ""}">○ 미등록 에이전트</span>`;
+
+    const railBadge = (r) => r === "settled"
+      ? `<span class="badge" style="color:var(--blue)" title="이 가맹점은 암호화폐를 직접 받지 않아 정산 파트너가 대납합니다">정산</span>`
+      : `<span class="badge" style="color:var(--accent)" title="수취인이 온체인으로 직접 정산합니다">온체인</span>`;
+
     const rows = a.events.slice().reverse().slice(0, 12).map(e => `
       <tr>
         <td class="dim" style="white-space:nowrap">${ago(e.at)}</td>
-        <td>${e.merchant}</td>
+        <td style="white-space:nowrap">${who}</td>
+        <td>${e.merchant}
+          ${e.planId ? `<div class="dim" style="font-size:10px">${e.planId} · ${e.planTitle}</div>` : ""}</td>
         <td class="mono">${Number(e.amount).toFixed(8)}</td>
+        <td>${e.rail ? railBadge(e.rail) : ""}</td>
         <td>${e.status === "paid"
               ? `<span class="ok">결제됨</span>`
               : `<span class="no">차단 · ${e.reason}</span>`}</td>
@@ -389,23 +602,90 @@ $("connect").onclick = () => connectWallet(false);
               ? `<a class="dim" target="_blank" href="${GIWA.explorer}/tx/${e.txHash}">보기</a>` : ""}</td>
       </tr>`).join("");
 
+    // 구매 계획 진행 상황
+    const planHtml = (a.plan ?? []).map(p => {
+      const done = a.events.filter(e => e.planId === p.id && e.status === "paid").length;
+      return `<span class="badge dim" style="margin-right:6px">${p.id} ${p.title} · ${done}건</span>`;
+    }).join("");
+
     $("liveBody").innerHTML = `
       <div class="dim" style="font-size:12px;margin-bottom:12px">
         사람이 매번 승인하지 않아도 에이전트가 구독료·API 크레딧 같은 반복 결제를 스스로 처리합니다.
         <b>한도를 넘거나 등록되지 않은 곳으로 가는 시도는 컨트랙트가 거절</b>하며, 그 기록도 함께 남습니다.
       </div>
-      <div class="row" style="margin:0 0 12px">
+      <div class="row" style="margin:0 0 10px">
         <span class="badge ok">결제 ${paid}</span>
         <span class="badge no">차단 ${blocked}</span>
       </div>
-      <table>
-        <thead><tr><th>시각</th><th>가맹점</th><th>금액(ETH)</th><th>결과</th><th></th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table>`;
+      <div style="margin-bottom:12px">
+        <div class="dim" style="font-size:11px;margin-bottom:5px">진행 중인 구매 계획</div>
+        ${planHtml || `<span class="dim" style="font-size:11px">-</span>`}
+      </div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead><tr><th>시각</th><th>에이전트</th><th>가맹점 · 계획</th>
+            <th>금액(ETH)</th><th>경로</th><th>결과</th><th></th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+      <div class="note">
+        <b>경로</b> — <span style="color:var(--accent)">온체인</span>은 수취인이 직접 정산하는 경우이고,
+        <span style="color:var(--blue)">정산</span>은 쿠팡·넷플릭스처럼 암호화폐를 받지 않는 곳입니다.
+        이때는 정산 파트너가 법정통화로 대납하고, 파트너는 승인 전에 컨트랙트의
+        <span class="mono">canSpend()</span>를 조회해 한도를 확인합니다.
+        <b>가맹점이 체인을 몰라도 한도는 온체인에서 강제됩니다.</b>
+      </div>`;
   }
 
+  /* 데몬 시작·정지 버튼.
+     제어 API는 로컬 serve.js에만 있다. 정적 호스팅 환경에서는 버튼을 숨긴다. */
+  const btn = $("btnDaemon");
+  let ctlAvailable = false;
+
+  const paint = (running) => {
+    btn.textContent = running ? "■" : "▶";
+    btn.title = running ? "정지" : "시작";
+    btn.style.color = running ? "var(--danger)" : "var(--accent)";
+  };
+
+  async function ctl(action) {
+    const r = await fetch(`/api/daemon/${action}`, { cache: "no-store" });
+    if (!r.ok) throw new Error("control unavailable");
+    return r.json();
+  }
+
+  (async function initCtl() {
+    try {
+      const s = await ctl("status");
+      ctlAvailable = true;
+      btn.style.display = "";
+      $("liveCard").style.display = "";   // 제어 가능하면 기록이 없어도 카드를 띄운다
+      paint(s.running);
+    } catch {
+      btn.style.display = "none";   // 원격 배포본에서는 표시하지 않는다
+    }
+  })();
+
+  btn.onclick = async () => {
+    if (!ctlAvailable) return;
+    btn.disabled = true;
+    try {
+      const cur = await ctl("status");
+      const next = await ctl(cur.running ? "stop" : "start");
+      paint(next.running);
+      setTimeout(tick, 1200);
+    } catch {
+      alert("에이전트 제어에 실패했습니다. 로컬에서 npm run web 으로 실행 중인지 확인하세요.");
+    } finally {
+      btn.disabled = false;
+    }
+  };
+
   tick();
-  setInterval(tick, 15000);
+  setInterval(async () => {
+    tick();
+    if (ctlAvailable) { try { paint((await ctl("status")).running); } catch {} }
+  }, 15000);
 })();
 
 /* 체험 패널.
@@ -503,6 +783,9 @@ $("connect").onclick = () => connectWallet(false);
     $("daily").value = "0.00002";
     $("total").value = "0.0002";
     $("days").value = "30";
+    // 프로그램으로 채운 값도 보존되도록 input 이벤트를 발생시킨다.
+    ["agent", "recipients", "perTx", "daily", "total", "days"]
+      .forEach(id => $(id)?.dispatchEvent(new Event("input")));
     if (typeof refresh === "function") refresh();
   };
 })();
